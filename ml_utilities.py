@@ -5,7 +5,7 @@
 #    / __ `__ \/ /  Licensed under Creative Commons BY-SA
 #   / / / / / / /  http://creativecommons.org/licenses/by-sa/3.0/
 #  /_/ /_/ /_/_/  _________                                   
-#               /_________/  Revision 19, 2016-06-02
+#               /_________/  Revision 20, 2016-07-31
 #      _______________________________
 # - -/__ Installing Python Scripts __/- - - - - - - - - - - - - - - - - - - - 
 # 
@@ -34,7 +34,7 @@
 __author__ = 'Morgan Loomis'
 __license__ = 'Creative Commons Attribution-ShareAlike'
 __category__ = 'animationScripts'
-__revision__ = 19
+__revision__ = 20
 
 import maya.cmds as mc
 import maya.mel as mm
@@ -1600,6 +1600,7 @@ class KeySelection(object):
             kwargs['time'] = self.time
         mc.tangentType(self.curves, **kwargs)
     
+    
     def keyTangent(self, **kwargs):
         '''
         Wrapper for maya's keyTangent command.
@@ -1669,7 +1670,7 @@ class KeySelection(object):
         
 
 
-class MlUi():
+class MlUi(object):
     '''
     Window template for consistency
     '''
@@ -1692,9 +1693,16 @@ class MlUi():
         
 
     def __enter__(self):
+        self.buildWindow()
+        
+    def __exit__(self, *args):
+        self.finish()
+        
+    def buildWindow(self):
         '''
         Initialize the UI
         '''
+        
         if mc.window(self.name, exists=True):
             mc.deleteUI(self.name)
 
@@ -1728,7 +1736,7 @@ class MlUi():
         return self
     
     
-    def __exit__(self, *args):
+    def finish(self):
         '''
         Finalize the UI
         '''
@@ -2006,9 +2014,7 @@ class UndoChunk():
         '''close the undo chunk'''
         if self.force:
             mc.undoInfo(closeChunk=True)
-    
 
-    
 
 #      ______________________
 # - -/__ Revision History __/- - - - - - - - - - - - - - - - - - - - - - - - 
@@ -2050,3 +2056,5 @@ class UndoChunk():
 # Revision 18: 2016-05-05 : Update matchBake to support tangent weights.
 #
 # Revision 19: 2016-06-02 : temp patching hotkey issue with > 2015
+#
+# Revision 20: 2016-07-31 : Update to MlUi to support subclassing.
