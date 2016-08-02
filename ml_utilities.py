@@ -5,7 +5,7 @@
 #    / __ `__ \/ /  Licensed under Creative Commons BY-SA
 #   / / / / / / /  http://creativecommons.org/licenses/by-sa/3.0/
 #  /_/ /_/ /_/_/  _________                                   
-#               /_________/  Revision 20, 2016-07-31
+#               /_________/  Revision 21, 2016-07-31
 #      _______________________________
 # - -/__ Installing Python Scripts __/- - - - - - - - - - - - - - - - - - - - 
 # 
@@ -34,7 +34,7 @@
 __author__ = 'Morgan Loomis'
 __license__ = 'Creative Commons Attribution-ShareAlike'
 __category__ = 'animationScripts'
-__revision__ = 20
+__revision__ = 21
 
 import maya.cmds as mc
 import maya.mel as mm
@@ -766,9 +766,10 @@ def renderShelfIcon(name='tmp', width=32, height=32):
 
     #here we attempt to move the rendered icon to a more generalized icon location
     newPath = getIconPath()
-    newPath = os.path.join(newPath, base)
-    shutil.move(image, newPath)
-    image = newPath
+    if newPath:
+        newPath = os.path.join(newPath, base)
+        shutil.move(image, newPath)
+        image = newPath
             
     #reset
     mc.setAttr('defaultRenderGlobals.currentRenderer', currentRenderer, type='string')
@@ -1694,6 +1695,7 @@ class MlUi(object):
 
     def __enter__(self):
         self.buildWindow()
+        return self
         
     def __exit__(self, *args):
         self.finish()
@@ -1733,7 +1735,6 @@ class MlUi(object):
         mc.text(label=self.info)
         mc.setParent('..')
         mc.separator(height=8, style='single')
-        return self
     
     
     def finish(self):
@@ -2058,3 +2059,5 @@ class UndoChunk():
 # Revision 19: 2016-06-02 : temp patching hotkey issue with > 2015
 #
 # Revision 20: 2016-07-31 : Update to MlUi to support subclassing.
+#
+# Revision 21: 2016-07-31 : MlUi bug fixes.
