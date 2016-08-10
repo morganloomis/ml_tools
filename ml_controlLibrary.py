@@ -5,7 +5,7 @@
 #    / __ `__ \/ /  Licensed under Creative Commons BY-SA
 #   / / / / / / /  http://creativecommons.org/licenses/by-sa/3.0/
 #  /_/ /_/ /_/_/  _________                                   
-#               /_________/  Revision 1, 2016-07-31
+#               /_________/  Revision 2, 2016-08-02
 #      _______________________________
 # - -/__ Installing Python Scripts __/- - - - - - - - - - - - - - - - - - - - 
 # 
@@ -15,9 +15,9 @@
 # Run the tool by importing the module, and then calling the primary function.
 # From python, this looks like:
 #     import ml_controlLibrary
-#     ml_controlLibrary.controlFilePath()
+#     ml_controlLibrary.ui()
 # From MEL, this looks like:
-#     python("import ml_controlLibrary;ml_controlLibrary.controlFilePath()");
+#     python("import ml_controlLibrary;ml_controlLibrary.ui()");
 #      _________________
 # - -/__ Description __/- - - - - - - - - - - - - - - - - - - - - - - - - - - 
 # 
@@ -45,7 +45,7 @@
 __author__ = 'Morgan Loomis'
 __license__ = 'Creative Commons Attribution-ShareAlike'
 __category__ = 'riggingScripts'
-__revision__ = 1
+__revision__ = 2
 
 
 import os, shutil
@@ -75,13 +75,6 @@ except ImportError:
 REPOSITORY_PATH = os.path.join(os.path.dirname(os.path.realpath(__file__)), 'ml_controlCurveRepository').replace('\\','/')
 
 
-def controlFilePath(name):
-    '''Simply return the expected path for a given control name.
-    '''
-    assert os.path.exists(REPOSITORY_PATH), "Repository doesn't exist: {}".format(REPOSITORY_PATH)
-    return os.path.join(REPOSITORY_PATH, name+'.ctrl').replace('\\','/')
-
-
 def ui():
     '''Launch the UI
     '''
@@ -97,7 +90,14 @@ def ui():
     win = ControlLibraryUI()
     win.buildMainLayout()
     win.finish()
-    
+
+
+def controlFilePath(name):
+    '''Simply return the expected path for a given control name.
+    '''
+    assert os.path.exists(REPOSITORY_PATH), "Repository doesn't exist: {}".format(REPOSITORY_PATH)
+    return os.path.join(REPOSITORY_PATH, name+'.ctrl').replace('\\','/')
+
 
 class ControlLibraryUI(utl.MlUi):
     '''Inherited from MlUi
@@ -336,3 +336,5 @@ def importControl(name):
 # - -/__ Revision History __/- - - - - - - - - - - - - - - - - - - - - - - -
 #
 # Revision 1: 2016-07-31 : First publish.
+#
+# Revision 2: 2016-08-02 : fixing function order for correct header generation.

@@ -5,7 +5,7 @@
 #    / __ `__ \/ /  Licensed under Creative Commons BY-SA
 #   / / / / / / /  http://creativecommons.org/licenses/by-sa/3.0/
 #  /_/ /_/ /_/_/  _________                                   
-#               /_________/  Revision 21, 2016-07-31
+#               /_________/  Revision 21, 2016-08-11
 #      _______________________________
 # - -/__ Installing Python Scripts __/- - - - - - - - - - - - - - - - - - - - 
 # 
@@ -46,6 +46,11 @@ import shutil, os, re, sys
 websiteURL = 'http://morganloomis.com'
 wikiURL = websiteURL+'/wiki/tools.html'
 
+#try to add to the iconpath if there is an icon folder in this directory
+icon_path = os.path.join(os.path.dirname(__file__),'icons').replace('\\','/')
+if os.path.isdir(icon_path) and icon_path not in os.environ['XBMLANGPATH']:
+    os.pathsep.join((os.environ['XBMLANGPATH'],icon_path))
+    
 
 def _showHelpCommand(url):
     '''
@@ -59,24 +64,24 @@ def main():
     This just launches the online help and serves as a placeholder for the default function for this script.
     '''
     mc.showHelp(wikiURL+'#ml_utilities', absolute=True)
-    
+
 
 def upToDateCheck(revision, prompt=True):
     '''
     This is a check that can be run by scripts that import ml_utilities to make sure they
     have the correct version.
     '''
-    
+
     if not '__revision__' in locals():
         return
-    
+
     if revision > __revision__:
         if prompt and mc.optionVar(query='ml_utilities_revision') < revision:
             result = mc.confirmDialog( title='Module Out of Date', 
-                        message='Your version of ml_utilities may be out of date for this tool. Without the latest file you may encounter errors.',
-                        button=['Download Latest Revision','Ignore', "Don't Ask Again"], 
-                        defaultButton='Download Latest Revision', cancelButton='Ignore', dismissString='Ignore' )
-            
+                                       message='Your version of ml_utilities may be out of date for this tool. Without the latest file you may encounter errors.',
+                                       button=['Download Latest Revision','Ignore', "Don't Ask Again"], 
+                                       defaultButton='Download Latest Revision', cancelButton='Ignore', dismissString='Ignore' )
+
             if result == 'Download Latest Revision':
                 mc.showHelp('http://morganloomis.com/download/animationScripts/ml_utilities.py', absolute=True)
             elif result == "Don't Ask Again":
@@ -98,11 +103,11 @@ def constrain(source, destination, translate=True, rotate=True, scale=False):
     '''
     Constrain two objects, even if they have some locked attributes.
     '''
-    
+
     transAttr = None
     rotAttr = None
     scaleAttr = None
-    
+
     if translate:
         transAttr = mc.listAttr(destination, keyable=True, unlocked=True, string='translate*')
     if rotate:
@@ -123,7 +128,7 @@ def constrain(source, destination, translate=True, rotate=True, scale=False):
         transSkip = 'none'
     if not rotSkip:
         rotSkip = 'none'
-    
+
     constraints = list()
     if rotAttr and transAttr and rotSkip == 'none' and transSkip == 'none':
         constraints.append(mc.parentConstraint(source, destination))
@@ -132,7 +137,7 @@ def constrain(source, destination, translate=True, rotate=True, scale=False):
             constraints.append(mc.pointConstraint(source, destination, skip=transSkip))
         if rotAttr:
             constraints.append(mc.orientConstraint(source, destination, skip=rotSkip))
-            
+
     return constraints
 
 
@@ -140,7 +145,7 @@ def createAnimLayer(nodes=None, name=None, namePrefix='', override=True):
     '''
     Create an animation layer, add nodes, and select it.
     '''
-    
+
     #if there's no layer name, generate one
     if not name:
         if namePrefix:
@@ -163,9 +168,9 @@ def createAnimLayer(nodes=None, name=None, namePrefix='', override=True):
             if not namePrefix:
                 namePrefix = 'ml_'
             name = namePrefix+'animLayer'
-    
+
     layer = mc.animLayer(name, override=override)
-    
+
     #add the nodes to the layer
     if nodes:
         sel = mc.ls(sl=True)
@@ -175,11 +180,11 @@ def createAnimLayer(nodes=None, name=None, namePrefix='', override=True):
             mc.select(sel)
         else:
             mc.select(clear=True)
-    
+
     #select the layer
     selectAnimLayer(layer)
     return layer
-    
+
 
 def selectAnimLayer(animLayer=None):
     '''
@@ -201,20 +206,20 @@ def getSelectedAnimLayers():
         if mc.animLayer(each, query=True, selected=True):
             layers.append(each)
     return layers
-    
+
 
 def createHotkey(command, name, description='', python=True):
     '''
     Open up the hotkey editor to create a hotkey from the specified command
     '''
-    
+
     if mm.eval('getApplicationVersionAsFloat')>2015:
         print "Creating hotkeys currently doesn't work in the new hotkey editor."
-        print "Here's the command, you'll have to make the hotkey yourself:"
+        print "Here's the command, you'll have to make the hotkey yourself (sorry):"
         print command
         OpenMaya.MGlobal.displayWarning("Couldn't create hotkey, please see script editor for details...")
         return
-    
+
     mm.eval('hotkeyEditor')
     mc.textScrollList('HotkeyEditorCategoryTextScrollList', edit=True, selectItem='User')
     mm.eval('hotkeyEditorCategoryTextScrollListSelect')
@@ -222,22 +227,22 @@ def createHotkey(command, name, description='', python=True):
 
     mc.textField('HotkeyEditorNameField', edit=True, text=name)
     mc.textField('HotkeyEditorDescriptionField', edit=True, text=description)
-    
+
     if python:
         if mm.eval('getApplicationVersionAsFloat') < 2013:
             command = 'python("'+command+'");'
         else: #2013 or above
             mc.radioButtonGrp('HotkeyEditorLanguageRadioGrp', edit=True, select=2)
-            
+
     mc.scrollField('HotkeyEditorCommandField', edit=True, text=command)
 
 
 def createShelfButton(command, label='', name=None, description='', 
-                       image=None, #the default image is a circle
-                       labelColor=(1, 0.5, 0), 
-                       labelBackgroundColor=(0, 0, 0, 0.5), 
-                       backgroundColor=None
-                       ):
+                      image=None, #the default image is a circle
+                      labelColor=(1, 0.5, 0), 
+                      labelBackgroundColor=(0, 0, 0, 0.5), 
+                      backgroundColor=None
+                      ):
     '''
     Create a shelf button for the command on the current shelf
     '''
@@ -246,7 +251,7 @@ def createShelfButton(command, label='', name=None, description='',
     #render_useBackground - circle
     #render_volumeShader - black dot
     #menuIconShow - eye
-    
+
     gShelfTopLevel = mm.eval('$temp=$gShelfTopLevel')
     if not mc.tabLayout(gShelfTopLevel, exists=True):
         OpenMaya.MGlobal.displayWarning('Shelf not visible.')
@@ -254,15 +259,15 @@ def createShelfButton(command, label='', name=None, description='',
 
     if not name:
         name = label
-    
+
     if not image:
         image = getIcon(name)
     if not image:
         image = 'render_useBackground'
-        
+
     shelfTab = mc.shelfTabLayout(gShelfTopLevel, query=True, selectTab=True)
     shelfTab = gShelfTopLevel+'|'+shelfTab
-    
+
     #add additional args depending on what version of maya we're in
     kwargs = dict()
     if mm.eval('getApplicationVersionAsFloat') >= 2009:
@@ -273,7 +278,7 @@ def createShelfButton(command, label='', name=None, description='',
         if backgroundColor:
             kwargs['enableBackground'] = bool(backgroundColor)
             kwargs['backgroundColor'] = backgroundColor
-    
+
     return mc.shelfButton(parent=shelfTab, label=name, command=command,
                           imageOverlayLabel=label, image=image, annotation=description, 
                           width=32, height=32, align='center', **kwargs)
@@ -284,7 +289,7 @@ def deselectChannels():
     Deselect selected channels in the channelBox
     by clearing selection and then re-selecting
     '''
-    
+
     if not getSelectedChannels():
         return
     sel = mc.ls(sl=True)
@@ -301,7 +306,7 @@ def formLayoutGrid(form, controls, offset=1):
     rowInc = 100/len(controls)
     colInc = 100/len(controls[0])
     position = {'left':0,'right':100,'top':0,'bottom':100}
-    
+
     for r,row in enumerate(controls):
         position['top'] = r*rowInc
         position['bottom'] = (r+1)*rowInc
@@ -319,7 +324,7 @@ def frameRange(start=None, end=None):
     Returns the frame range based on the highlighted timeslider,
     or otherwise the playback range.
     '''
-    
+
     if not start and not end:
         gPlayBackSlider = mm.eval('$temp=$gPlayBackSlider')
         if mc.timeControl(gPlayBackSlider, query=True, rangeVisible=True):
@@ -328,22 +333,22 @@ def frameRange(start=None, end=None):
         else:
             start = mc.playbackOptions(query=True, min=True)
             end = mc.playbackOptions(query=True, max=True)
-    
+
     return start,end
-    
+
 
 def getChannelFromAnimCurve(curve, plugs=True):
     '''
     Finding the channel associated with a curve has gotten really complicated since animation layers.
     This is a recursive function which walks connections from a curve until an animated channel is found.
     '''
-    
-    
+
+
     #we need to save the attribute for later.
     attr = ''
     if '.' in curve:
         curve, attr = curve.split('.')
-    
+
     nodeType = mc.nodeType(curve)
     if nodeType.startswith('animCurveT') or nodeType.startswith('animBlendNode'):
         source = mc.listConnections(curve+'.output', source=False, plugs=plugs)
@@ -354,7 +359,7 @@ def getChannelFromAnimCurve(curve, plugs=True):
             attrSuffix = 'X'
             if plugs:
                 attrSuffix = attr[-1]
-                
+
             source = mc.listConnections(curve+'.output'+attrSuffix, source=False, plugs=plugs)
         if source:
             nodeType = mc.nodeType(source[0])
@@ -368,9 +373,9 @@ def getCurrentCamera():
     Returns the camera that you're currently looking through.
     If the current highlighted panel isn't a modelPanel, 
     '''
-    
+
     panel = mc.getPanel(withFocus=True)
-    
+
     if mc.getPanel(typeOf=panel) != 'modelPanel':
         #just get the first visible model panel we find, hopefully the correct one.
         for p in mc.getPanel(visiblePanels=True):
@@ -378,20 +383,20 @@ def getCurrentCamera():
                 panel = p
                 mc.setFocus(panel)
                 break
-    
+
     if mc.getPanel(typeOf=panel) != 'modelPanel':
         OpenMaya.MGlobal.displayWarning('Please highlight a camera viewport.')
         return False
-    
+
     camShape = mc.modelEditor(panel, query=True, camera=True)
 
     if not camShape:
         return False
-    
+
     if mc.nodeType(camShape) == 'transform':
         return camShape
     elif mc.nodeType(camShape) == 'camera':
-        return mc.listRelatives(camShape, parent=True)[0]
+        return mc.listRelatives(camShape, parent=True, path=True)[0]
 
 
 def getFrameRate():
@@ -413,7 +418,7 @@ def getFrameRate():
         return 60
     if 'fps' in currentUnit:
         return int(currentUnit.substitute('fps',''))
-    
+
     return 1
 
 
@@ -422,7 +427,7 @@ def getHoldTangentType():
     Returns the best in and out tangent type for creating a hold with the current tangent settings.
     '''
     tangentType = mc.keyTangent(query=True, g=True, ott=True)[0]
-    
+
     if tangentType=='linear':
         return 'linear','linear'
     if tangentType=='step':
@@ -437,21 +442,21 @@ def getIcon(name):
     Check if an icon name exists, and return with proper extension.
     Otherwise return standard warning icon.
     '''
-    
+
     ext = '.png'
     if mm.eval('getApplicationVersionAsFloat') < 2011:
         ext = '.xpm'
-    
+
     if not name.endswith('.png') and not name.endswith('.xpm'):
         name+=ext
-    
-    for each in os.environ['XBMLANGPATH'].split(':'):
+
+    for each in os.environ['XBMLANGPATH'].split(os.pathsep):
         #on some linux systems each path ends with %B, for some reason
         iconPath = os.path.abspath(each.replace('%B',''))
         iconPath = os.path.join(iconPath,name)
         if os.path.exists(iconPath):        
             return name
-    
+
     return None
 
 
@@ -459,9 +464,9 @@ def getIconPath():
     '''
     Find the icon path
     '''
-    
+
     appDir = os.environ['MAYA_APP_DIR']
-    for each in os.environ['XBMLANGPATH'].split(':'):
+    for each in os.environ['XBMLANGPATH'].split(os.pathsep):
         #on some linux systems each path ends with %B, for some reason
         iconPath = each.replace('%B','')
         if iconPath.startswith(appDir):
@@ -469,12 +474,12 @@ def getIconPath():
             if os.path.exists(iconPath):
                 return iconPath
 
-    
+
 def getNamespace(node):
     '''Returns the namespace of a node with simple string parsing. Now supports nested namespaces.'''
-    
+
     namespace = ''
-    
+
     if node and mc.objExists(node):
         shortName = mc.ls(node, shortNames=True)[0]
         if ':' in shortName:
@@ -487,14 +492,14 @@ def getSelectedChannels():
     '''
     Return channels that are selected in the channelbox
     '''
-    
+
     if not mc.ls(sl=True):
         return
     gChannelBoxName = mm.eval('$temp=$gChannelBoxName')
     sma = mc.channelBox(gChannelBoxName, query=True, sma=True)
     ssa = mc.channelBox(gChannelBoxName, query=True, ssa=True)
     sha = mc.channelBox(gChannelBoxName, query=True, sha=True)
-                
+
     channels = list()
     if sma:
         channels.extend(sma)
@@ -510,23 +515,23 @@ def listAnimCurves(objOrAttrs):
     '''
     This lists connections to all types of animNodes
     '''
-    
+
     animNodes = list()
-    
+
     tl = mc.listConnections(objOrAttr, s=True, d=False, type='animCurveTL')
     ta = mc.listConnections(objOrAttr, s=True, d=False, type='animCurveTA')
     tu = mc.listConnections(objOrAttr, s=True, d=False, type='animCurveTU')
-    
+
     if tl:
         animNodes.extend(tl)
     if ta:
         animNodes.extend(ta)
     if tu:
         animNodes.extend(tu)
-    
+
     return animNodes
-    
-    
+
+
 def longestCommonSubstring(data):
     '''
     Returns the longest string that is present in the list of strings.
@@ -569,7 +574,7 @@ def matchBake(source=None, destination=None, bakeOnOnes=False, maintainOffset=Fa
         attributes.extend(['translateX','translateY','translateZ'])
     if rotate:
         attributes.extend(['rotateX','rotateY','rotateZ'])
-    
+
     if not attributes:
         OpenMaya.MGlobal.displayWarning('No attributes to bake!')
         return
@@ -611,7 +616,7 @@ def matchBake(source=None, destination=None, bakeOnOnes=False, maintainOffset=Fa
                 currKeytimes = mc.keyframe(s, attribute=a, time=(start,end), query=True, timeChange=True)
                 if not currKeytimes:
                     continue
-                
+
                 keytimes[d][a] = currKeytimes
                 allKeyTimes.extend(currKeytimes)
 
@@ -621,7 +626,7 @@ def matchBake(source=None, destination=None, bakeOnOnes=False, maintainOffset=Fa
                     weighted[d][a] = True
                     itw[d][a] = mc.keyTangent(s, attribute=a, time=(start,end), query=True, inWeight=True)
                     otw[d][a] = mc.keyTangent(s, attribute=a, time=(start,end), query=True, outWeight=True)
-                
+
                 #change fixed tangents to spline, because we can't set fixed tangents
                 for i, each in enumerate(itt[d][a]):
                     if each == 'fixed':
@@ -630,7 +635,7 @@ def matchBake(source=None, destination=None, bakeOnOnes=False, maintainOffset=Fa
                 for i, each in enumerate(ott[d][a]):
                     if each == 'fixed':
                         ott[d][a][i] = 'spline'
-                        
+
                 #add the start and end frames and tangents if they're not keyed
                 if not start in keytimes[d][a]:
                     keytimes[d][a].insert(0,start)
@@ -646,21 +651,21 @@ def matchBake(source=None, destination=None, bakeOnOnes=False, maintainOffset=Fa
                     if a in weighted[d]:
                         itw[d][a].append(1.0)
                         otw[d][a].append(1.0)
-                    
+
                 #reverse these, because we want to pop but start from the beginning
                 itt[d][a].reverse()
                 ott[d][a].reverse()
                 if a in weighted[d]:
                     itw[d][a].reverse()
                     otw[d][a].reverse()
-                    
+
 
     if bakeOnOnes:
         allKeyTimes = range(int(start), int(end)+1)
     else:
         allKeyTimes = list(set(allKeyTimes))
         allKeyTimes.sort()
-    
+
     with UndoChunk():
         with IsolateViews():
             for frame in allKeyTimes:
@@ -685,10 +690,10 @@ def matchBake(source=None, destination=None, bakeOnOnes=False, maintainOffset=Fa
                                                ott=ott[d][a].pop()
                                                )
                                 mc.setAttr(d+'.'+a, v)
-                                                                  
+
                         except:
                             pass
-                        
+
             #this was breaking the tangents inside the other loop, so run it after.
             if not bakeOnOnes and preserveTangentWeight:
                 for d in destination:
@@ -713,24 +718,24 @@ def minimizeRotationCurves(obj):
     '''
     Sets rotation animation to the value closest to zero.
     '''
-    
+
     rotateCurves = mc.keyframe(obj, attribute=('rotateX','rotateY', 'rotateZ'), query=True, name=True)
-    
+
     if not rotateCurves or len(rotateCurves) < 3:
         return
-    
+
     keyTimes = mc.keyframe(rotateCurves, query=True, timeChange=True)
     tempFrame = sorted(keyTimes)[0] - 1
-    
+
     #set a temp frame
     mc.setKeyframe(rotateCurves, time=(tempFrame,), value=0)
-    
+
     #euler filter
     mc.filterCurve(rotateCurves)
-    
+
     #delete temp key
     mc.cutKey(rotateCurves, time=(tempFrame,))
-    
+
 
 def renderShelfIcon(name='tmp', width=32, height=32):
     '''
@@ -740,7 +745,7 @@ def renderShelfIcon(name='tmp', width=32, height=32):
 
     #getCamera
     cam = getCurrentCamera()
-    
+
     #save these values for resetting
     currentRenderer = mc.getAttr('defaultRenderGlobals.currentRenderer')
     imageFormat = mc.getAttr('defaultRenderGlobals.imageFormat')
@@ -748,7 +753,7 @@ def renderShelfIcon(name='tmp', width=32, height=32):
     mc.setAttr('defaultRenderGlobals.currentRenderer', 'mayaSoftware', type='string')
 
     mayaVersion = mm.eval('getApplicationVersionAsFloat')
-    
+
     imageFormat = 50 #XPM
     if mayaVersion >= 2011:
         imageFormat = 32 #PNG
@@ -760,7 +765,7 @@ def renderShelfIcon(name='tmp', width=32, height=32):
 
     mc.setAttr(cam+'.backgroundColor', 0.8,0.8,0.8, type='double3')
     #need to reset this afterward
-    
+
     image = mc.render(cam, xresolution=width, yresolution=height)
     base = os.path.basename(image)
 
@@ -770,11 +775,11 @@ def renderShelfIcon(name='tmp', width=32, height=32):
         newPath = os.path.join(newPath, base)
         shutil.move(image, newPath)
         image = newPath
-            
+
     #reset
     mc.setAttr('defaultRenderGlobals.currentRenderer', currentRenderer, type='string')
     mc.setAttr('defaultRenderGlobals.imageFormat', imageFormat)
-    
+
     return image
 
 
@@ -782,76 +787,76 @@ def setAnimValue(plug, value):
     '''
     Sets key if the channel is keyed, otherwise setAttr
     '''
-    
+
     if mc.keyframe(plug, query=True, name=True):
         mc.setKeyframe(plug, value=value)
-    
+
     mc.setAttr(plug, value)
 
 
 class Dragger(object):
 
     def __init__(self,
-                name = 'mlDraggerContext',
-                title = 'Dragger',
-                defaultValue=0,
-                minValue=None,
-                maxValue=None,
-                multiplier=0.01,
-                cursor='hand'
-                ):
-        
+                 name = 'mlDraggerContext',
+                 title = 'Dragger',
+                 defaultValue=0,
+                 minValue=None,
+                 maxValue=None,
+                 multiplier=0.01,
+                 cursor='hand'
+                 ):
+
         self.multiplier = multiplier
         self.defaultValue = defaultValue
         self.minValue = minValue
         self.maxValue = maxValue
         #self.cycleCheck = mc.cycleCheck(query=True, evaluation=True)
-        
+
         self.draggerContext = name
         if not mc.draggerContext(self.draggerContext, exists=True):
             self.draggerContext = mc.draggerContext(self.draggerContext)
-                                                    
+
         mc.draggerContext(self.draggerContext, edit=True,
-                        pressCommand=self.press, 
-                        dragCommand=self.drag,
-                        releaseCommand=self.release,
-                        cursor=cursor,
-                        drawString=title,
-                        undoMode='all'
-                        )
-                                                    
-    
+                          pressCommand=self.press, 
+                          dragCommand=self.drag,
+                          releaseCommand=self.release,
+                          cursor=cursor,
+                          drawString=title,
+                          undoMode='all'
+                          )
+
+
     def press(self, *args):
         '''
         Be careful overwriting the press method in child classes, because of the undoInfo openChunk
         '''
-        
+
         self.anchorPoint = mc.draggerContext(self.draggerContext, query=True, anchorPoint=True)
         self.button = mc.draggerContext(self.draggerContext, query=True, button=True)
-        
+
         # This turns off the undo queue until we're done dragging, so we can undo it.
         mc.undoInfo(openChunk=True)
-        
-        
+
+
     def drag(self, *args):
         '''
         This is what is actually run during the drag, updating the coordinates and calling the 
         placeholder drag functions depending on which button is pressed.
         '''
-        
+
         self.dragPoint = mc.draggerContext(self.draggerContext, query=True, dragPoint=True)
-        
+
         #if this doesn't work, try getmodifier
         self.modifier = mc.draggerContext(self.draggerContext, query=True, modifier=True)
-        
+
         self.x = ((self.dragPoint[0] - self.anchorPoint[0]) * self.multiplier) + self.defaultValue
         self.y = ((self.dragPoint[1] - self.anchorPoint[1]) * self.multiplier) + self.defaultValue
-        
+
         if self.minValue is not None and self.x < self.minValue:
             self.x = self.minValue
         if self.maxValue is not None and self.x > self.maxValue:
             self.x = self.maxValue
-        
+
         #dragString
         if self.modifier == 'control':
             if self.button == 1:
@@ -868,9 +873,9 @@ class Dragger(object):
                 self.dragLeft()
             elif self.button == 2:
                 self.dragMiddle()
-        
+
         mc.refresh()
-    
+
     def release(self, *args):
         '''
         Be careful overwriting the release method in child classes. Not closing the undo chunk leaves maya in a sorry state.
@@ -879,40 +884,40 @@ class Dragger(object):
         mc.undoInfo(closeChunk=True)
         #mc.cycleCheck(evaluation=self.cycleCheck)
         mm.eval('SelectTool')
-    
+
     def drawString(self, message):
         '''
         Creates a string message at the position of the pointer.
         '''
         mc.draggerContext(self.draggerContext, edit=True, drawString=message)
-        
+
     def dragLeft(self,*args):
         '''Placeholder for potential commands. This is meant to be overridden by a child class.'''
         pass
-            
+
     def dragMiddle(self,*args):
         '''Placeholder for potential commands. This is meant to be overridden by a child class.'''
         pass
-        
+
     def dragControlLeft(self,*args):
         '''Placeholder for potential commands. This is meant to be overridden by a child class.'''
         pass
-            
+
     def dragControlMiddle(self,*args):
         '''Placeholder for potential commands. This is meant to be overridden by a child class.'''
         pass
-        
+
     def dragShiftLeft(self,*args):
         '''Placeholder for potential commands. This is meant to be overridden by a child class.'''
         pass
-            
+
     def dragShiftMiddle(self,*args):
         '''Placeholder for potential commands. This is meant to be overridden by a child class.'''
         pass
-    
+
     #no drag right, because that is monopolized by the right click menu
     #no alt drag, because that is used for the camera
-    
+
     def setTool(self):
         mc.setToolTo(self.draggerContext)
 
@@ -923,39 +928,39 @@ class IsolateViews():
     This speeds up any process that causes the viewport to refresh,
     such as baking or changing time. 
     '''
-    
+
     def __enter__(self):
-    
+
         self.sel = mc.ls(sl=True)
         self.modelPanels = mc.getPanel(type='modelPanel')
-        
+
         #unfortunately there's no good way to know what's been isolated, so in this case if a view is isolated, skip it.
         self.skip = list()
         for each in self.modelPanels:
             if mc.isolateSelect(each, query=True, state=True):
                 self.skip.append(each)
-            
+
         self.isolate(True)
-        
+
         mc.select(clear=True)
-        
+
         self.resetAutoKey = mc.autoKeyframe(query=True, state=True)
         mc.autoKeyframe(state=False)
-        
-    
+
+
     def __exit__(self, *args):
-            
+
         #reset settings
         mc.autoKeyframe(state=self.resetAutoKey)
-        
+
         if self.sel:
             mc.select(self.sel)
-            
+
         self.isolate(False)
-        
-    
+
+
     def isolate(self, state):
-    
+
         mc.select(clear=True)
         for each in self.modelPanels:
             if not each in self.skip:
@@ -964,11 +969,11 @@ class IsolateViews():
 
 class KeySelection(object):
     '''
-    
+
     '''
-    
+
     def __init__(self, *args):
-    
+
         #if args are passed in, this has been called from and out of date script. Warn and fail.
         if args:
             print ''
@@ -976,50 +981,50 @@ class KeySelection(object):
             print "Please visit http://morganloomis.com/downloads and download the latest version of this tool."
             OpenMaya.MGlobal.displayError('Tool out of date. See script editor for details.')
             return
-        
+
         self.shortestTime = getFrameRate()/6000.0
-        
+
         #node variables
         self.nodeSelection = mc.ls(sl=True)
         self._nodes = list()
         self._curves = list()
         self._channels = list()
-        
+
         #time variables 
         self.currentTime = mc.currentTime(query=True)
         self._time = None
         self._timeRangeStart = None
         self._timeRangeEnd = None
-        
+
         #keyframe command variables
         self.selected = False
-        
+
         #other housekeeping
         self._curvesCulled = False
-    
-    
+
+
     @property
     def curves(self):
         '''
         The keySelections's animation curve list.
         '''
-        
+
         # if self._curves is False or None, then it has been initialized and curves haven't been found.
         if self._curves == []:
-            
+
             #find anim curves connected to channels or nodes
             for each in (self._channels, self._nodes):
                 if not each:
                     continue
                 # this will only return time based keyframes, not driven keys
                 self._curves = mc.keyframe(each, time=(':',), query=True, name=True)
-                    
+
                 if self._curves:
                     self._curvesCulled = False
                     break
             if not self._curves:
                 self._curves = False
-                
+
         # need to remove curves which are unkeyable
         # supposedly referenced keys are keyable in 2013, I'll need to test that and update
         if self._curves and not self._curvesCulled:
@@ -1036,18 +1041,18 @@ class KeySelection(object):
                 for r in remove:
                     self._curves.remove(r)
             self._curvesCulled = True
-        
+
         return self._curves
-    
-    
+
+
     @property
     def channels(self):
         '''
         The keySelection's channels list.
         '''
-        
+
         if not self._channels:
-        
+
             if self._curves:
                 for c in self._curves:
                     self._channels.append(getChannelFromAnimCurve(c))
@@ -1057,17 +1062,17 @@ class KeySelection(object):
                     if keyable:
                         for attr in keyable:
                             self._channels.append('.'.join((obj, attr)))
-                         
+
         return self._channels
-            
+
     @property
     def nodes(self):
         '''
         The keySelection's node list.
         '''
-        
+
         if not self._nodes:
-            
+
             if self._curves:
                 self._nodes = list()
                 for c in self._curves:
@@ -1079,9 +1084,9 @@ class KeySelection(object):
                     n = each.split('.')[0]
                     if not n in self._nodes:
                         self._nodes.append(n)
-                        
+
         return self._nodes
-    
+
     @property
     def args(self):
         '''
@@ -1095,8 +1100,8 @@ class KeySelection(object):
         if self._nodes:
             return self._nodes
         return None
-    
-    
+
+
     @property
     def time(self):
         '''
@@ -1119,8 +1124,8 @@ class KeySelection(object):
             timeList = self.keyframe(query=True, timeChange=True)
             return tuple(set(timeList))
         return (':',)
-    
-    
+
+
     @property
     def times(self):
         '''
@@ -1134,7 +1139,7 @@ class KeySelection(object):
                 curveTime = (curveTime[0],)
             timeList.append(curveTime)
         return timeList
-    
+
     @property
     def values(self):
         valueList = list()
@@ -1144,25 +1149,25 @@ class KeySelection(object):
                 curveValues = (curveValues[0],)            
             valueList.append(curveValues)
         return valueList
-        
-    
+
+
     @property
     def initialized(self):
         '''
         Basically just tells if the object has been sucessfully initialized.
         '''
         return bool(self.args)
-    
-    
+
+
     def selectedObjects(self):
         '''
         Initializes the keySelection object with selected objects.
         Returns True if successful.
         '''
-        
+
         if not self.nodeSelection:
             return False
-        
+
         self._nodes = self.nodeSelection
         return True
 
@@ -1172,30 +1177,30 @@ class KeySelection(object):
         Initializes the keySelection object with selected channels.
         Returns True if successful.
         '''
-        
+
         chanBoxChan = getSelectedChannels()
-        
+
         if not chanBoxChan:
             return False
-        
+
         #channels may be on shapes, include shapes in the list
         nodes = self.nodeSelection
         shapes = mc.listRelatives(self.nodeSelection, shapes=True, path=True)
         if shapes:
             nodes.extend(shapes)
             nodes = list(set(nodes))
-        
+
         for obj in nodes:
             for attr in chanBoxChan:
                 if mc.attributeQuery(attr, node=obj, exists=True):
                     self._channels.append('.'.join((obj,attr)))
-        
+
         if not self._channels:
             return False
-        
+
         return True
-    
-    
+
+
     def selectedLayers(self, includeLayerWeight=True):
         '''
         This affects keys on all layers that the node belongs to.
@@ -1215,87 +1220,87 @@ class KeySelection(object):
         #we only want to use curves, since nodes or channels wont accurately represent all layers
         self._nodes = None
         self._channels = None
-    
-    
+
+
     def visibleInGraphEditor(self):
         '''
         Initializes the keySelection object with curves visibile in graph editor.
         Returns True if successful.
         '''
-        
-        
+
+
         if not 'graphEditor1' in mc.getPanel(visiblePanels=True):
             return False
 
         graphVis = mc.selectionConnection('graphEditor1FromOutliner', query=True, obj=True)
-        
+
         if not graphVis:
             return False
-        
+
         for each in graphVis:
             try:
                 self._curves.extend(mc.keyframe(each, query=True, name=True))
             except StandardError:
                 pass
-                
-        
+
+
         if not self._curves:
             return False
-            
+
         return True
-        
-        
+
+
     def selectedKeys(self):
         '''
         Initializes the keySelection object with selected keyframes.
         Returns True if successful.
         '''
-        
+
         selectedCurves = mc.keyframe(query=True, name=True, selected=True)
-        
+
         if not selectedCurves:
             return False
         self._curves = selectedCurves
         self.selected = True
         return True
-        
+
 
     def keyedChannels(self, includeShapes=False):
         '''
         Initializes the keySelection object with keyed channels.
         Returns True if successful.
         '''
-        
+
         if not self.nodeSelection:
             return False
-        
+
         self._nodes = self.nodeSelection
         if includeShapes:
-            shapes = mc.listRelatives(self.nodeSelection, shapes=True)
+            shapes = mc.listRelatives(self.nodeSelection, shapes=True, path=True)
             if shapes:
                 self._nodes.extend(shapes)
-        
+
         #since self.curves is a property, it is actually finding curves from self._nodes
         if not self.curves:
             #if we don't find curves, reset nodes and fail
             self._nodes = None
             return False
-        
+
         #reset self._nodes, otherwise they'll take priority over curves.
         self._nodes = None
-        
+
         return True
 
-    
+
     def keyedInHierarchy(self, includeRoot=True):
         '''
         Initializes the keySelection object with all the animation curves in the hierarchy.
         Returns True if successful.
         '''
-        
+
         if not self.nodeSelection:
             return False
-        
+
         objs = mc.ls(self.nodeSelection, long=True)
         tops = list()
         namespaces = list()
@@ -1304,7 +1309,7 @@ class KeySelection(object):
             if namespace in namespaces:
                 #we've already done this one
                 continue
-            
+
             hier = obj.split('|')
             if not namespace:
                 #if there's no namespace, just grab the top of the hierarchy
@@ -1312,7 +1317,7 @@ class KeySelection(object):
                     tops.append(hier[1])
                 else:
                     tops.append(obj)
-            
+
             else:
                 #otherwise look through the hierarchy until you find the first node with the same namespace
                 namespaces.append(namespace)
@@ -1320,110 +1325,110 @@ class KeySelection(object):
                     if namespace in each:
                         tops.append(each)
                         break
-        
+
         if not tops:
             #if we haven't been sucessful, we're done
             return False
-        
+
         nodes = mc.listRelatives(tops, pa=True, type='transform', ad=True)
         if not nodes:
             nodes = list()
-            
+
         if includeRoot:
             nodes.extend(tops)
-        
+
         if not nodes:
             return False
-        
+
         #now that we've determined the hierarchy, lets find keyed nodes
         #for node in nodes:
         # this will only return time based keyframes, not driven keys
         self._curves = mc.keyframe(nodes, time=(':',), query=True, name=True)
-        
+
         #nodes or channels can be acessed by the node or channel property
         if not self._curves:
             return False
-        
+
         return True
-    
-    
+
+
     def scene(self):
         '''
         Initializes the keySelection object with all animation curves in the scene.
         Returns True if successful.
         '''
-        
+
         tl = mc.ls(type='animCurveTL')
         ta = mc.ls(type='animCurveTA')
         tu = mc.ls(type='animCurveTU')
-        
+
         if tl:
             self._curves.extend(tl)
         if ta:
             self._curves.extend(ta)
         if tu:
             self._curves.extend(tu)
-            
+
         if not self._curves:
             return False
-        
+
         return True
 
-    
+
     def selectedFrameRange(self):
         '''
         Sets the keySelection time to the selected frame range, returns false if frame range not selected.
         '''
-        
+
         gPlayBackSlider = mm.eval('$temp=$gPlayBackSlider')
         if mc.timeControl(gPlayBackSlider, query=True, rangeVisible=True):
             self._timeRangeStart, self._timeRangeEnd = mc.timeControl(gPlayBackSlider, query=True, rangeArray=True)
             return True
         return False
-        
-        
+
+
     def frameRange(self):
         '''
         Sets the keySelection time to the selected frame range, or the current frame range.
         '''
         #this is selected range in the time slider
         self._timeRangeStart, self._timeRangeEnd = frameRange()
-        
+
 
     def toEnd(self, includeCurrent=False):
         '''
         Sets the keySelection time to the range from the current frame to the last frame.
         Option to include the current frame.
         '''
-        
+
         t = self.currentTime
         if not includeCurrent:
             t+=self.shortestTime
         self._timeRangeStart = t
-        
+
 
     def fromBeginning(self, includeCurrent=False):
         '''
         Sets the keySelection time to the range from the first frame to the current frame.
         Option to include the current frame.
         '''
-        
+
         t = self.currentTime        
         if not includeCurrent:
             t-=self.shortestTime
         self._timeRangeEnd = t
-        
+
 
     def keyRange(self):
         '''
         Sets the keySelection time range to the range of keys in the keySelection.
         '''
-        
+
         keyTimes = self.getSortedKeyTimes()
-        
+
         if not keyTimes or keyTimes[0] == keyTimes[-1]:
             return
-        
+
         self._timeRangeStart = keyTimes[0]
         self._timeRangeEnd = keyTimes[-1]
 
@@ -1433,29 +1438,29 @@ class KeySelection(object):
         Sets the keySelection time to the current frame.
         '''
         self._time = self.currentTime
-        
-        
+
+
     def previousKey(self):
         '''
         Sets the keySelection time to the previous key from the current frame.
         '''
         self._time = self.findKeyframe(which='previous')
-    
-    
+
+
     def nextKey(self):
         '''
         Sets the keySelection time to the next key from the current frame.
         '''
         self._time = self.findKeyframe(which='next')
-    
-    
+
+
     def setKeyframe(self, deleteSubFrames=False, **kwargs):
         '''
         Wrapper for the setKeyframe command. Curve and time arguments will be provided based on 
         how this object was intitialized, otherwise usage is the same as maya's setKeyframe command.
         Option to delete sub-frames after keying.
         '''
-        
+
         if not 'time' in kwargs:
             #still not sure about how I want to do this, but we need a discrete time.
             #if time is a string set to current time
@@ -1463,15 +1468,15 @@ class KeySelection(object):
                 kwargs['time'] = mc.currentTime(query=True)
             else:
                 kwargs['time'] = self.time
-        
+
         if 'insert' in kwargs and kwargs['insert'] == True:
             #setKeyframe fails if insert option is used but there's no keyframes on the channels.
             #key any curves with insert, then key everything again without it
-            
+
             if self.curves:
                 mc.setKeyframe(self.curves, **kwargs)
             kwargs['insert'] = False
-        
+
         #want to try setting keys on nodes first, since certain setKeyframe arguments wont work
         #as expected with channels
         if self._nodes:
@@ -1480,12 +1485,12 @@ class KeySelection(object):
         else:
             mc.setKeyframe(self.channels, **kwargs)
             self._curves = mc.keyframe(self.channels, query=True, name=True)
-        
+
         #there's a new selection of curves, so reset the member variables
         self._channels = list()
         self._nodes = list()
         self._time = kwargs['time']
-        
+
         if deleteSubFrames:
             #remove nearby sub-frames
             #this breaks at higher frame ranges because maya doesn't keep enough digits
@@ -1495,8 +1500,8 @@ class KeySelection(object):
                 tol = self.shortestTime
                 self.cutKey(time=(self.currentTime+tol, self.currentTime+0.5))
                 self.cutKey(time=(self.currentTime-0.5, self.currentTime-tol))
-        
-    
+
+
     def keyframe(self,**kwargs):
         '''
         Wrapper for the keyframe command. Curve and time arguments will be provided based on 
@@ -1507,92 +1512,92 @@ class KeySelection(object):
             kwargs['sl'] = True
         elif not 'time' in kwargs:
             kwargs['time'] = self.time
-        
+
         return mc.keyframe(self.curves, **kwargs)
-        
-        
+
+
     def cutKey(self, includeSubFrames=False, **kwargs):
         '''
         Wrapper for the cutKey command. Curve and time arguments will be provided based on 
         how this object was intitialized, otherwise usage is the same as maya's cutKey command.
         Option to delete sub-frames.
         '''
-        
+
         if not 'includeUpperBound' in kwargs:
             kwargs['includeUpperBound'] = False
-            
+
         if self.selected:
             mc.cutKey(sl=True, **kwargs)
             return
-        
+
         if not 'time' in kwargs:
             if includeSubFrames:
                 kwargs['time'] = (round(self.time[0])-0.5, round(self.time[-1])+0.5)
             else:
                 kwargs['time'] = self.time
         mc.cutKey(self.curves, **kwargs)
-        
-        
+
+
     def copyKey(self, **kwargs):
         '''
-        
+
         '''
-        
+
         if not 'includeUpperBound' in kwargs:
             kwargs['includeUpperBound'] = False
-            
+
         if self.selected:
             mc.copyKey(sl=True, **kwargs)
             return
-        
+
         if not 'time' in kwargs:
             kwargs['time'] = self.time
-            
+
         mc.copyKey(self.args, **kwargs)
-        
-        
+
+
     def pasteKey(self, option='replaceCompletely', **kwargs):
         '''
-        
+
         '''
         mc.pasteKey(self.args, option=option, **kwargs)
-        
-        
+
+
     def selectKey(self,**kwargs):
         '''
         Wrapper for maya's selectKey command.
         '''
-        
+
         if not 'time' in kwargs:
             kwargs['time'] = self.time
         mc.selectKey(self.curves, **kwargs)
-    
-    
+
+
     def moveKey(self, frames):
         '''
         A wrapper for keyframe -edit -timeChange
         '''
-        
+
         if not frames:
             return
-        
+
         self.keyframe(edit=True, relative=True, timeChange=frames)
-        
-        
+
+
     def scaleKey(self, timePivot=0, **kwargs):
         '''
         Wrapper for maya's scaleKey command.
         '''
-        
+
         if not 'time' in kwargs:
             kwargs['time'] = self.time
-        
+
         if timePivot == 'current':
             timePivot = self.currentTime
-            
+
         mc.scaleKey(self.curves, timePivot=timePivot, **kwargs)
-    
-    
+
+
     def tangentType(self, **kwargs):
         '''
         Wrapper for maya's tangentType command.
@@ -1600,8 +1605,8 @@ class KeySelection(object):
         if not 'time' in kwargs:
             kwargs['time'] = self.time
         mc.tangentType(self.curves, **kwargs)
-    
-    
+
+
     def keyTangent(self, **kwargs):
         '''
         Wrapper for maya's keyTangent command.
@@ -1609,32 +1614,32 @@ class KeySelection(object):
         if not 'time' in kwargs:
             kwargs['time'] = self.time
         mc.keyTangent(self.curves, **kwargs)
-    
-    
+
+
     def findKeyframe(self, which='next', loop=False, roundFrame=False, **kwargs):
         '''
         This is similar to maya's findKeyframe, but operates on the keySelection and has options
         for rounding and looping.
         '''
-        
+
         if which not in ('next','previous','first','last'):
             return
-        
+
         if not roundFrame:
             if not loop or which == 'first' or which == 'last':
                 #if there's not special options, just use default maya command for speed
                 return mc.findKeyframe(self.args, which=which, **kwargs)
-        
+
         keyTimes = self.getSortedKeyTimes()
-        
+
         #if we don't find any, we're done
         if not keyTimes:
             return
-                
+
         tolerence = 0.0
         if roundFrame:
             tolerence = 0.5
-        
+
         if which == 'previous':
             findTime = keyTimes[-1]
             for x in reversed(keyTimes):
@@ -1651,24 +1656,24 @@ class KeySelection(object):
             findTime = keyTimes[0]
         elif which == 'last':
             findTime = keyTimes[-1]
-            
+
         if roundFrame:
             #round to nearest frame, if that option is selected
             findTime = round(findTime)
-        
+
         return findTime
-        
-        
+
+
     def getSortedKeyTimes(self):
         '''
         Returns a list of the key times in order without duplicates.
         '''
-        
+
         keyTimes = self.keyframe(query=True, timeChange=True)
         if not keyTimes:
             return
         return sorted(list(set(keyTimes)))
-        
+
 
 
 class MlUi(object):
@@ -1677,110 +1682,110 @@ class MlUi(object):
     '''
 
     def __init__(self, name, title, width=400, height=200, info='', menu=True, module=None):
-    
+
         self.name = name
         self.title = title
         self.width = width
         self.height = height
         self.info = info
         self.menu = menu
-        
+
         self.module = module
         if not module or module == '__main__':
             self.module = self.name
 
         #look for icon
         self.icon = getIcon(name)
-        
+
 
     def __enter__(self):
         self.buildWindow()
         return self
-        
+
     def __exit__(self, *args):
         self.finish()
-        
+
     def buildWindow(self):
         '''
         Initialize the UI
         '''
-        
+
         if mc.window(self.name, exists=True):
             mc.deleteUI(self.name)
 
         mc.window(self.name, title='ml :: '+self.title, iconName=self.title, width=self.width, height=self.height, menuBar=self.menu)
-        
-        
+
+
         if self.menu:
             self.createMenu()
-        
+
         self.form = mc.formLayout()
         self.column = mc.columnLayout(adj=True)
 
-        
+
         mc.rowLayout( numberOfColumns=2, columnWidth2=(34, self.width-34), adjustableColumn=2, 
-                    columnAlign2=('right','left'),
-                    columnAttach=[(1, 'both', 0), (2, 'both', 8)] )
+                      columnAlign2=('right','left'),
+                      columnAttach=[(1, 'both', 0), (2, 'both', 8)] )
 
         #if we can find an icon, use that, otherwise do the text version
         if self.icon:
             mc.iconTextStaticLabel(style='iconOnly', image1=self.icon)
         else:
             mc.text(label=' _ _ |\n| | | |')
-            
+
         if not self.menu:
             mc.popupMenu(button=1)
             mc.menuItem(label='Help', command=(_showHelpCommand(wikiURL+'#'+self.name)))
-        
+
         mc.text(label=self.info)
         mc.setParent('..')
         mc.separator(height=8, style='single')
-    
-    
+
+
     def finish(self):
         '''
         Finalize the UI
         '''
-        
+
         mc.setParent(self.form)
 
         frame = mc.frameLayout(labelVisible=False)
         mc.helpLine()
-        
+
         mc.formLayout( self.form, edit=True,
-                     attachForm=((self.column, 'top', 0), (self.column, 'left', 0),
-                                 (self.column, 'right', 0), (frame, 'left', 0),
-                                 (frame, 'bottom', 0), (frame, 'right', 0)),
-                     attachNone=((self.column, 'bottom'), (frame, 'top')) )
+                       attachForm=((self.column, 'top', 0), (self.column, 'left', 0),
+                                   (self.column, 'right', 0), (frame, 'left', 0),
+                                   (frame, 'bottom', 0), (frame, 'right', 0)),
+                       attachNone=((self.column, 'bottom'), (frame, 'top')) )
 
         mc.showWindow(self.name)
         mc.window(self.name, edit=True, width=self.width, height=self.height)
 
-        
+
     def createMenu(self, *args):
         '''
         Create the main menu for the UI
         '''
-        
+
         #generate shelf label by removing ml_
         shelfLabel = self.name.replace('ml_','')
         module = self.module
         if not module:
             module = self.name
-            
+
         #if icon exists, use that
         argString = ''
         if not self.icon:
             argString = ', label="'+shelfLabel+'"'
-        
+
         mc.menu(label='Tools')
         mc.menuItem(label='Add to shelf', 
-            command='import ml_utilities;ml_utilities.createShelfButton("import '+module+';'+module+'.ui()", name="'+self.name+'", description="Open the UI for '+self.name+'."'+argString+')')
+                    command='import ml_utilities;ml_utilities.createShelfButton("import '+module+';'+module+'.ui()", name="'+self.name+'", description="Open the UI for '+self.name+'."'+argString+')')
         if not self.icon:
             mc.menuItem(label='Get Icon',
-                command=(_showHelpCommand(websiteURL+'/wp-content/files/'+self.name+'.png')))
+                        command=(_showHelpCommand(websiteURL+'/wp-content/files/'+self.name+'.png')))
         mc.menuItem(label='Get More Tools!', 
-            command=(_showHelpCommand(websiteURL+'/downloads')))
+                    command=(_showHelpCommand(websiteURL+'/downloads')))
         mc.setParent( '..', menu=True )
 
         mc.menu(label='Help')
@@ -1788,15 +1793,15 @@ class MlUi(object):
         mc.menuItem(label='Documentation', command=(_showHelpCommand(wikiURL+'#'+self.name)))
         mc.menuItem(label='Python Command Documentation', command=(_showHelpCommand(wikiURL+'#\%5B\%5B'+self.name+'\%20Python\%20Documentation\%5D\%5D')))
         mc.menuItem(label='Submit a Bug or Request', command=(_showHelpCommand(websiteURL+'/contact/')))
-        
+
         mc.setParent( '..', menu=True )
-       
-       
+
+
     def about(self, *args):
         '''
         This pops up a window which shows the revision number of the current script.
         '''
-        
+
         text='by Morgan Loomis\n\n'
         try:
             __import__(self.module)
@@ -1808,36 +1813,36 @@ class MlUi(object):
             text = text+'ml_utilities Rev: '+str(__revision__)+'\n'
         except StandardError:
             pass
-        
+
         mc.confirmDialog(title=self.name, message=text, button='Close')
-    
-    
+
+
     def buttonWithPopup(self, label=None, command=None, annotation='', shelfLabel='', shelfIcon='render_useBackground', readUI_toArgs=dict()):
         '''
         Create a button and attach a popup menu to a control with options to create a shelf button or a hotkey.
         The argCommand should return a kwargs dictionary that can be used as args for the main command.
         '''
-        
+
         if self.icon:
             shelfIcon = self.icon
-        
+
         if annotation and not annotation.endswith('.'):
             annotation+='.'
-        
+
         button = mc.button(label=label, command=command, annotation=annotation+' Or right click for more options.')
-        
+
         mc.popupMenu()
         self.shelfMenuItem(command=command, annotation=annotation, shelfLabel=shelfLabel, shelfIcon=shelfIcon)
         self.hotkeyMenuItem(command=command, annotation=annotation)
         return button
-        
+
 
     def shelfMenuItem(self, command=None, annotation='', shelfLabel='', shelfIcon='menuIconConstraints', menuLabel='Create Shelf Button'):
         '''
         This creates a menuItem that can be attached to a control to create a shelf menu with the given command
         '''
         pythonCommand = 'import '+self.name+';'+self.name+'.'+command.__name__+'()'
-        
+
         mc.menuItem(label=menuLabel,
                     command='import ml_utilities;ml_utilities.createShelfButton(\"'+pythonCommand+'\", \"'+shelfLabel+'\", \"'+self.name+'\", description=\"'+annotation+'\", image=\"'+shelfIcon+'\")',
                     enableCommandRepeat=True,
@@ -1853,20 +1858,20 @@ class MlUi(object):
                     command='import ml_utilities;ml_utilities.createHotkey(\"'+melCommand+'\", \"'+self.name+'\", description=\"'+annotation+'\")',
                     enableCommandRepeat=True,
                     image='commandButton')
-    
-    
+
+
     class ButtonWithPopup():
-        
+
         def __init__(self, label=None, name=None, command=None, annotation='', shelfLabel='', shelfIcon='render_useBackground', readUI_toArgs=dict(), **kwargs):
             '''
             The fancy part of this object is the readUI_toArgs argument.
             '''
-            
+
             self.uiArgDict = readUI_toArgs
             self.name = name
             self.command = command
             self.kwargs = kwargs
-            
+
             self.annotation = annotation
             self.shelfLabel = shelfLabel
             self.shelfIcon = shelfIcon
@@ -1882,17 +1887,17 @@ class MlUi(object):
             mc.menuItem(label='Create Hotkey',
                         command=self.createHotkey, image='commandButton') 
 
-        
+
         def readUI(self):
             '''
             This reads the UI elements and turns them into arguments saved in a kwargs style member variable
             '''
-            
+
             if self.uiArgDict:
                 #this is some fanciness to read the values of UI elements and generate or run the resulting command
                 #keys represent the argument names, the values are UI elements
                 for k in self.uiArgDict.keys():
-                    
+
                     uiType = mc.objectTypeUI(self.uiArgDict[k])
                     value = None
                     if uiType == 'rowGroupLayout':
@@ -1905,12 +1910,12 @@ class MlUi(object):
                         elif 'slider' in controls:
                             try:
                                 value = mc.floatSliderGrp(self.uiArgDict[k], query=True, value=True)
-                                
+
                             except StandardError:
                                 pass
                             try:
                                 value = mc.intSliderGrp(self.uiArgDict[k], query=True, value=True)
-                                
+
                             except StandardError:
                                 pass
                         elif 'field1' in controls:
@@ -1920,25 +1925,25 @@ class MlUi(object):
                     else:
                         OpenMaya.MGlobal.displayWarning('Cannot read '+uiType+' UI element: '+self.uiArgDict[k])
                         continue
-                    
+
                     self.kwargs[k] = value
-        
-        
+
+
         def runCommand(self, *args):
             '''
             This compiles the kwargs and runs the command directly
             '''
             self.readUI()
             self.command(**self.kwargs)
-            
+
 
         def stringCommand(self):
             '''
             This takes the command
             '''
-            
+
             cmd = 'import '+self.name+'\n'+self.name+'.'+self.command.__name__+'('
-            
+
             comma = False
             for k,v in self.kwargs.items():
                 value = v
@@ -1946,15 +1951,15 @@ class MlUi(object):
                     value = "'"+value+"'"
                 else:
                     value = str(value)
-                
+
                 if comma:
                     cmd+=', '
                 cmd = cmd+k+'='+value
-                
+
                 comma = True
-                
+
             cmd+=')'
-            
+
             return cmd
 
 
@@ -1971,46 +1976,46 @@ class MlUi(object):
             '''
             Builds the command and prompts to create a hotkey.
             '''
-            
+
             self.readUI()
             pythonCommand = self.stringCommand()
             createHotkey(pythonCommand, self.name, description=self.annotation)
 
-    
+
 class SkipUndo():
     '''
     Skips adding the encapsulated commands to the undo queue, so that you 
     cannot undo them.
     '''
-    
+
     def __enter__(self):
         '''
         Turn off undo
         '''
         mc.undoInfo(stateWithoutFlush=False)
-        
+
     def __exit__(self,*args):
         '''
         Turn on undo
         '''
         mc.undoInfo(stateWithoutFlush=True)
-        
-        
+
+
 class UndoChunk():
     '''
     In versions of maya before 2011, python doesn't always undo properly, so in 
     some cases we have to manage the undo queue ourselves.
     '''
-    
+
     def __init__(self, force=False):
         self.force = force
-        
+
     def __enter__(self):
         '''open the undo chunk'''
         if self.force or mm.eval('getApplicationVersionAsFloat') < 2011:
             self.force = True
             mc.undoInfo(openChunk=True)
-            
+
     def __exit__(self, *args):
         '''close the undo chunk'''
         if self.force:
@@ -2061,3 +2066,5 @@ class UndoChunk():
 # Revision 20: 2016-07-31 : Update to MlUi to support subclassing.
 #
 # Revision 21: 2016-07-31 : MlUi bug fixes.
+#
+# Revision 21: 2016-08-11 : windows support for icons
