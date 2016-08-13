@@ -5,7 +5,7 @@
 #    / __ `__ \/ /  Licensed under Creative Commons BY-SA
 #   / / / / / / /  http://creativecommons.org/licenses/by-sa/3.0/
 #  /_/ /_/ /_/_/  _________                                   
-#               /_________/  Revision 2, 2016-08-02
+#               /_________/  Revision 3, 2016-08-11
 #      _______________________________
 # - -/__ Installing Python Scripts __/- - - - - - - - - - - - - - - - - - - - 
 # 
@@ -44,8 +44,8 @@
 # - - - - - - - - - - - - - - - - - - - - - - - - - - - - - /_ Enjoy! _/- - -
 __author__ = 'Morgan Loomis'
 __license__ = 'Creative Commons Attribution-ShareAlike'
-__category__ = 'riggingScripts'
-__revision__ = 2
+__category__ = 'animationScripts'
+__revision__ = 3
 
 
 import os, shutil
@@ -56,7 +56,7 @@ import maya.mel as mm
 
 try:
     import ml_utilities as utl
-    utl.upToDateCheck(20)
+    utl.upToDateCheck(21)
 except ImportError:
     result = mc.confirmDialog( title='Module Not Found', 
                 message='This tool requires the ml_utilities module. Once downloaded you will need to restart Maya.', 
@@ -284,7 +284,7 @@ def promptExportControl(*args):
                                   )
         if result != 'Overwrite':
             return 
-        
+    
     ctrl = exportControl(sel, ctrlName)
     
     strokes = mc.ls(type='stroke')
@@ -300,9 +300,9 @@ def promptExportControl(*args):
     mc.AttachBrushToCurves(ctrl)
     image = utl.renderShelfIcon(name=ctrlName, width=64, height=64)
 
-    imagePath = os.path.join(REPOSITORY_PATH, os.path.basename(image))    
+    imagePath = os.path.join(REPOSITORY_PATH, os.path.basename(image))
     shutil.move(image, imagePath)
-
+    
     #delete new strokes.
     newStrokes = [x for x in mc.ls(type='stroke') if x not in strokes]
     for each in newStrokes:
@@ -338,3 +338,5 @@ def importControl(name):
 # Revision 1: 2016-07-31 : First publish.
 #
 # Revision 2: 2016-08-02 : fixing function order for correct header generation.
+#
+# Revision 3: 2016-08-11 : documentation and dependency update
