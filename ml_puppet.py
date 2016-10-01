@@ -5,7 +5,7 @@
 #    / __ `__ \/ /  Licensed under Creative Commons BY-SA
 #   / / / / / / /  http://creativecommons.org/licenses/by-sa/3.0/
 #  /_/ /_/ /_/_/  _________                                   
-#               /_________/  Revision 9, 2015-11-18
+#               /_________/  Revision 10, 2016-09-25
 #      _______________________________
 # - -/__ Installing Python Scripts __/- - - - - - - - - - - - - - - - - - - - 
 # 
@@ -44,7 +44,7 @@
 __author__ = 'Morgan Loomis'
 __license__ = 'Creative Commons Attribution-ShareAlike'
 __category__ = 'animationScripts'
-__revision__ = 9
+__revision__ = 10
 
 import maya.cmds as mc
 import maya.mel as mm
@@ -53,7 +53,7 @@ import math, re
 
 try:
     import ml_utilities as utl
-    utl.upToDateCheck(15)
+    utl.upToDateCheck(21)
 except ImportError:
     result = mc.confirmDialog( title='Module Not Found', 
                 message='This tool requires the ml_utilities module. Once downloaded you will need to restart Maya.', 
@@ -503,7 +503,7 @@ def fkIkSwitch(nodes=None, switchTo=None, switchRange=False, bakeOnOnes=False):
             matchControls.extend(data['fkChain'])
             
             if switchRange:
-                keytimes = mc.keyframe([data['ikControl'],data['pvControl']], time=(start,end), query=True, timeChange=True)
+                keytimes = mc.keyframe([data['ikControls'],data['pvControl']], time=(start,end), query=True, timeChange=True)
                 if keytimes:
                     elemDict[elem]['keytimes'] = list(set(keytimes))
                 else:
@@ -962,3 +962,5 @@ if __name__ == '__main__':
 # Revision 8: 2015-06-23 : puppet context menu fix for windows paths
 #
 # Revision 9: 2015-11-18 : Updated fk ik switching code for latest puppeteer
+#
+# Revision 10: 2016-09-25 : Minor KeyError bug fix.

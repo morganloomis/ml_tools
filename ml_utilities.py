@@ -5,7 +5,7 @@
 #    / __ `__ \/ /  Licensed under Creative Commons BY-SA
 #   / / / / / / /  http://creativecommons.org/licenses/by-sa/3.0/
 #  /_/ /_/ /_/_/  _________                                   
-#               /_________/  Revision 21, 2016-08-11
+#               /_________/  Revision 22, 2016-10-01
 #      _______________________________
 # - -/__ Installing Python Scripts __/- - - - - - - - - - - - - - - - - - - - 
 # 
@@ -34,7 +34,7 @@
 __author__ = 'Morgan Loomis'
 __license__ = 'Creative Commons Attribution-ShareAlike'
 __category__ = 'animationScripts'
-__revision__ = 21
+__revision__ = 22
 
 import maya.cmds as mc
 import maya.mel as mm
@@ -329,7 +329,8 @@ def frameRange(start=None, end=None):
         gPlayBackSlider = mm.eval('$temp=$gPlayBackSlider')
         if mc.timeControl(gPlayBackSlider, query=True, rangeVisible=True):
             frameRange = mc.timeControl(gPlayBackSlider, query=True, rangeArray=True)
-            return frameRange
+            start = frameRange[0]
+            end = frameRange[1]-1
         else:
             start = mc.playbackOptions(query=True, min=True)
             end = mc.playbackOptions(query=True, max=True)
@@ -1739,7 +1740,7 @@ class MlUi(object):
 
         mc.text(label=self.info)
         mc.setParent('..')
-        mc.separator(height=8, style='single')
+        mc.separator(height=8, style='single', horizontal=True)
 
 
     def finish(self):
@@ -1858,6 +1859,39 @@ class MlUi(object):
                     command='import ml_utilities;ml_utilities.createHotkey(\"'+melCommand+'\", \"'+self.name+'\", description=\"'+annotation+'\")',
                     enableCommandRepeat=True,
                     image='commandButton')
+    
+    
+    def selectionField(self, label='', annotation='', channel=False):
+        '''
+        Create a field with a button that adds the selection to the field.
+        '''
+        field = mc.textFieldButtonGrp(label=label, text='', 
+                                      buttonLabel='Set Selected', 
+                                      buttonCommand=self.setCorrectiveDriverPlug)
+        mc.textFieldButtonGrp(field, edit=True, buttonCommand=partial(self._populateSelectionField, channel, field))
+        
+        
+    def _populateSelectionField(self, channel, field, *args):
+        
+        selectedChannels = None
+        if channel:
+            selectedChannels = getSelectedChannels()
+            if not selectedChannels:
+                raise RuntimeError('Please select an attribute in the channelBox.')
+            if len(selectedChannels) > 1:
+                raise RuntimeError('Please select only one attribute.')
+            
+        sel = mc.ls(sl=True)
+        if not sel:
+            raise RuntimeError('Please select a node.')
+        if len(sel) > 1:
+            raise RuntimeError('Please select only one node.')
+        
+        selection = sel[0]
+        if selectedChannels:
+            selection = selection+'.'+selectedChannels[0]
+            
+        mc.textFieldButtonGrp(field, edit=True, text=selection)
 
 
     class ButtonWithPopup():
@@ -2068,3 +2102,5 @@ class UndoChunk():
 # Revision 21: 2016-07-31 : MlUi bug fixes.
 #
 # Revision 21: 2016-08-11 : windows support for icons
+#
+# Revision 22: 2016-10-01 : changing frameRange to return consistent results when returning timeline or selection.
