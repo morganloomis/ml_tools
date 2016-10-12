@@ -5,7 +5,7 @@
 #    / __ `__ \/ /  Licensed under Creative Commons BY-SA
 #   / / / / / / /  http://creativecommons.org/licenses/by-sa/3.0/
 #  /_/ /_/ /_/_/  _________                                   
-#               /_________/  Revision 22, 2016-10-01
+#               /_________/  Revision 23, 2016-10-12
 #      _______________________________
 # - -/__ Installing Python Scripts __/- - - - - - - - - - - - - - - - - - - - 
 # 
@@ -34,7 +34,7 @@
 __author__ = 'Morgan Loomis'
 __license__ = 'Creative Commons Attribution-ShareAlike'
 __category__ = 'animationScripts'
-__revision__ = 22
+__revision__ = 23
 
 import maya.cmds as mc
 import maya.mel as mm
@@ -427,8 +427,10 @@ def getHoldTangentType():
     '''
     Returns the best in and out tangent type for creating a hold with the current tangent settings.
     '''
-    tangentType = mc.keyTangent(query=True, g=True, ott=True)[0]
-
+    try:
+        tangentType = mc.keyTangent(query=True, g=True, ott=True)[0]
+    except:
+        return 'auto','auto'
     if tangentType=='linear':
         return 'linear','linear'
     if tangentType=='step':
@@ -620,9 +622,15 @@ def matchBake(source=None, destination=None, bakeOnOnes=False, maintainOffset=Fa
 
                 keytimes[d][a] = currKeytimes
                 allKeyTimes.extend(currKeytimes)
-
-                itt[d][a] = mc.keyTangent(s, attribute=a, time=(start,end), query=True, inTangentType=True)
-                ott[d][a] = mc.keyTangent(s, attribute=a, time=(start,end), query=True, outTangentType=True)
+                
+                #errors in maya 2016.5?
+                try:
+                    itt[d][a] = mc.keyTangent(s, attribute=a, time=(start,end), query=True, inTangentType=True)
+                    ott[d][a] = mc.keyTangent(s, attribute=a, time=(start,end), query=True, outTangentType=True)
+                except RuntimeError as err:
+                    itt[d][a] = ['auto'] * len(currKeyTimes)
+                    ott[d][a] = ['auto'] * len(currKeyTimes)
+                    
                 if preserveTangentWeight and mc.keyTangent(s, attribute=a, query=True, weightedTangents=True)[0]:
                     weighted[d][a] = True
                     itw[d][a] = mc.keyTangent(s, attribute=a, time=(start,end), query=True, inWeight=True)
@@ -1861,14 +1869,14 @@ class MlUi(object):
                     image='commandButton')
     
     
-    def selectionField(self, label='', annotation='', channel=False):
+    def selectionField(self, label='', annotation='', channel=False, text=''):
         '''
         Create a field with a button that adds the selection to the field.
         '''
-        field = mc.textFieldButtonGrp(label=label, text='', 
-                                      buttonLabel='Set Selected', 
-                                      buttonCommand=self.setCorrectiveDriverPlug)
+        field = mc.textFieldButtonGrp(label=label, text=text, 
+                                      buttonLabel='Set Selected')
         mc.textFieldButtonGrp(field, edit=True, buttonCommand=partial(self._populateSelectionField, channel, field))
+        return field
         
         
     def _populateSelectionField(self, channel, field, *args):
@@ -1892,7 +1900,36 @@ class MlUi(object):
             selection = selection+'.'+selectedChannels[0]
             
         mc.textFieldButtonGrp(field, edit=True, text=selection)
+    
+    
+    def selectionList(self, channel=False, **kwargs):
+        tsl = mc.textScrollList(**kwargs)
+        mc.button(label='Append Selected', command=partial(self._populateSelectionList, channel, tsl))
+        return tsl
 
+
+    def _populateSelectionList(self, channel, control, *args):
+
+        selectedChannels = None
+        if channel:
+            selectedChannels = getSelectedChannels()
+            if not selectedChannels:
+                raise RuntimeError('Please select an attribute in the channelBox.')
+            if len(selectedChannels) > 1:
+                raise RuntimeError('Please select only one attribute.')
+
+        sel = mc.ls(sl=True)
+        if not sel:
+            raise RuntimeError('Please select a node.')
+        if len(sel) > 1:
+            raise RuntimeError('Please select only one node.')
+
+        selection = sel[0]
+        if selectedChannels:
+            selection = selection+'.'+selectedChannels[0]
+
+        mc.textScrollList(control, edit=True, append=[selection])
+        
 
     class ButtonWithPopup():
 
@@ -2104,3 +2141,5 @@ class UndoChunk():
 # Revision 21: 2016-08-11 : windows support for icons
 #
 # Revision 22: 2016-10-01 : changing frameRange to return consistent results when returning timeline or selection.
+#
+# Revision 23: 2016-10-12 : Tangent bug fixes for 2016.5
