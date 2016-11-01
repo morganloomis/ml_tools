@@ -5,7 +5,7 @@
 #    / __ `__ \/ /  Licensed under Creative Commons BY-SA
 #   / / / / / / /  http://creativecommons.org/licenses/by-sa/3.0/
 #  /_/ /_/ /_/_/  _________                                   
-#               /_________/  Revision 23, 2016-10-12
+#               /_________/  Revision 24, 2016-10-31
 #      _______________________________
 # - -/__ Installing Python Scripts __/- - - - - - - - - - - - - - - - - - - - 
 # 
@@ -34,7 +34,7 @@
 __author__ = 'Morgan Loomis'
 __license__ = 'Creative Commons Attribution-ShareAlike'
 __category__ = 'animationScripts'
-__revision__ = 23
+__revision__ = 24
 
 import maya.cmds as mc
 import maya.mel as mm
@@ -83,7 +83,7 @@ def upToDateCheck(revision, prompt=True):
                                        defaultButton='Download Latest Revision', cancelButton='Ignore', dismissString='Ignore' )
 
             if result == 'Download Latest Revision':
-                mc.showHelp('http://morganloomis.com/download/animationScripts/ml_utilities.py', absolute=True)
+                mc.showHelp('http://mDynamicAnimUIorganloomis.com/download/animationScripts/ml_utilities.py', absolute=True)
             elif result == "Don't Ask Again":
                 mc.optionVar(intValue=('ml_utilities_revision', revision))
         return False
@@ -2143,3 +2143,5 @@ class UndoChunk():
 # Revision 22: 2016-10-01 : changing frameRange to return consistent results when returning timeline or selection.
 #
 # Revision 23: 2016-10-12 : Tangent bug fixes for 2016.5
+#
+# Revision 24: 2016-10-31 : Adding selection field to mlUI
