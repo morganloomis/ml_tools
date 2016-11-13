@@ -5,7 +5,7 @@
 #    / __ `__ \/ /  Licensed under Creative Commons BY-SA
 #   / / / / / / /  http://creativecommons.org/licenses/by-sa/3.0/
 #  /_/ /_/ /_/_/  _________                                   
-#               /_________/  Revision 1, 2016-05-31
+#               /_________/  Revision 2, 2016-11-10
 #      _______________________________
 # - -/__ Installing Python Scripts __/- - - - - - - - - - - - - - - - - - - - 
 # 
@@ -196,7 +196,8 @@ def isolate(option):
 
         for obj in sel:
             attrs = mc.listAttr(obj, keyable=True, unlocked=True, string=wildCard)
-            channels.extend([obj+'.'+a for a in attrs])
+            if attrs:
+                channels.extend([obj+'.'+a for a in attrs])
                 
     if not channels:
         for obj in sel:
@@ -244,3 +245,5 @@ if __name__ == '__main__':
 # - -/__ Revision History __/- - - - - - - - - - - - - - - - - - - - - - - -
 #
 # Revision 1: 2016-05-31 : First publish.
+#
+# Revision 2: 2016-11-10 : Fix error when no channels are found.
