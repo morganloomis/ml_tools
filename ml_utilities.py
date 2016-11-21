@@ -5,7 +5,7 @@
 #    / __ `__ \/ /  Licensed under Creative Commons BY-SA
 #   / / / / / / /  http://creativecommons.org/licenses/by-sa/3.0/
 #  /_/ /_/ /_/_/  _________                                   
-#               /_________/  Revision 24, 2016-10-31
+#               /_________/  Revision 25, 2016-11-21
 #      _______________________________
 # - -/__ Installing Python Scripts __/- - - - - - - - - - - - - - - - - - - - 
 # 
@@ -34,7 +34,7 @@
 __author__ = 'Morgan Loomis'
 __license__ = 'Creative Commons Attribution-ShareAlike'
 __category__ = 'animationScripts'
-__revision__ = 24
+__revision__ = 25
 
 import maya.cmds as mc
 import maya.mel as mm
@@ -46,10 +46,10 @@ import shutil, os, re, sys
 websiteURL = 'http://morganloomis.com'
 wikiURL = websiteURL+'/wiki/tools.html'
 
-#try to add to the iconpath if there is an icon folder in this directory
+#try to add to the iconpath if there is an icons folder in this directory
 icon_path = os.path.join(os.path.dirname(__file__),'icons').replace('\\','/')
 if os.path.isdir(icon_path) and icon_path not in os.environ['XBMLANGPATH']:
-    os.pathsep.join((os.environ['XBMLANGPATH'],icon_path))
+    os.environ['XBMLANGPATH'] = os.pathsep.join((os.environ['XBMLANGPATH'],icon_path))
     
 
 def _showHelpCommand(url):
@@ -2145,3 +2145,5 @@ class UndoChunk():
 # Revision 23: 2016-10-12 : Tangent bug fixes for 2016.5
 #
 # Revision 24: 2016-10-31 : Adding selection field to mlUI
+#
+# Revision 25: 2016-11-21 : silly icon path bug
