@@ -5,7 +5,7 @@
 #    / __ `__ \/ /  Licensed under Creative Commons BY-SA
 #   / / / / / / /  http://creativecommons.org/licenses/by-sa/3.0/
 #  /_/ /_/ /_/_/  _________                                   
-#               /_________/  Revision 25, 2016-11-21
+#               /_________/  Revision 26, 2016-12-05
 #      _______________________________
 # - -/__ Installing Python Scripts __/- - - - - - - - - - - - - - - - - - - - 
 # 
@@ -34,7 +34,7 @@
 __author__ = 'Morgan Loomis'
 __license__ = 'Creative Commons Attribution-ShareAlike'
 __category__ = 'animationScripts'
-__revision__ = 25
+__revision__ = 26
 
 import maya.cmds as mc
 import maya.mel as mm
@@ -512,6 +512,26 @@ def getSelectedChannels():
         channels.extend(sha)
 
     return channels
+
+
+def getSkinCluster(mesh):
+    '''
+    Return the first skinCluster affecting this mesh.
+    '''
+    
+    if mc.nodeType(mesh) in ('mesh','nurbsSurface','nurbsCurve'):
+        shapes = [mesh]
+    else:
+        shapes = mc.listRelatives(mesh, shapes=True, path=True)
+
+    for shape in shapes:
+        history = mc.listHistory(shape, groupLevels=True, pruneDagObjects=True)
+        if not history:
+            continue
+        skins = mc.ls(history, type='skinCluster')
+        if skins:
+            return skins[0]
+    return None
 
 
 def listAnimCurves(objOrAttrs):
@@ -2147,3 +2167,5 @@ class UndoChunk():
 # Revision 24: 2016-10-31 : Adding selection field to mlUI
 #
 # Revision 25: 2016-11-21 : silly icon path bug
+#
+# Revision 26: 2016-12-05 : Adding getSkinCluster
