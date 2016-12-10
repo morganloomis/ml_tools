@@ -5,7 +5,7 @@
 #    / __ `__ \/ /  Licensed under Creative Commons BY-SA
 #   / / / / / / /  http://creativecommons.org/licenses/by-sa/3.0/
 #  /_/ /_/ /_/_/  _________                                   
-#               /_________/  Revision 2, 2014-03-01
+#               /_________/  Revision 3, 2016-12-10
 #      _______________________________
 # - -/__ Installing Python Scripts __/- - - - - - - - - - - - - - - - - - - - 
 # 
@@ -31,8 +31,6 @@
 #      __________________
 # - -/__ Requirements __/- - - - - - - - - - - - - - - - - - - - - - - - - - 
 # 
-# This script requires the euclid module, which can be downloaded here:
-# 	http://partiallydisassembled.net/euclid.html
 # This script requires the ml_utilities module, which can be downloaded here:
 # 	http://morganloomis.com/wiki/tools.html#ml_utilities
 #                                                             __________
@@ -40,26 +38,15 @@
 __author__ = 'Morgan Loomis'
 __license__ = 'Creative Commons Attribution-ShareAlike'
 __category__ = 'animationScripts'
-__revision__ = 2
+__revision__ = 3
 
 import maya.cmds as mc
 import maya.mel as mm
 from maya import OpenMaya
 
 try:
-    import euclid
-except ImportError:
-    result = mc.confirmDialog( title='Module Not Found', 
-                message='This tool requires the euclid module, which can be downloaded for free from the internet. Once downloaded you will need to restart Maya.', 
-                button=['Go To Website','Cancel'], 
-                defaultButton='Cancel', cancelButton='Cancel', dismissString='Cancel' )
-    if result != 'Cancel':
-        mc.showHelp('http://partiallydisassembled.net/euclid.html',absolute=True)
-        
-
-try:
     import ml_utilities as utl
-    utl.upToDateCheck(9)
+    utl.upToDateCheck(27)
 except ImportError:
     result = mc.confirmDialog( title='Module Not Found', 
                 message='This tool requires the ml_utilities module. Once downloaded you will need to restart Maya.', 
@@ -93,9 +80,9 @@ class CameraDepthDragger(utl.Dragger):
             OpenMaya.MGlobal.displayWarning('Please make a selection.')
             return
             
-        #get the position of the camera in space and convert it to a euclid vector
+        #get the position of the camera in space and convert it to a vector
         camPnt = mc.xform(cam, query=True, worldSpace=True, rotatePivot=True)
-        self.cameraVector = euclid.Vector3(camPnt[0],camPnt[1],camPnt[2])
+        self.cameraVector = utl.Vector(camPnt[0],camPnt[1],camPnt[2])
         
         self.objs = list()
         self.vector = list()
@@ -108,7 +95,7 @@ class CameraDepthDragger(utl.Dragger):
             
             #get the position of the objects as a vector, and subtract the camera vector from that
             objPnt = mc.xform(obj, query=True, worldSpace=True, rotatePivot=True)
-            objVec = euclid.Vector3(objPnt[0],objPnt[1],objPnt[2])
+            objVec = utl.Vector(objPnt[0],objPnt[1],objPnt[2])
             self.objs.append(obj)
             self.vector.append(objVec-self.cameraVector)
             self.normalized.append(self.vector[-1].normalized())
@@ -121,6 +108,7 @@ class CameraDepthDragger(utl.Dragger):
             OpenMaya.MGlobal.displayWarning('Some objects skipped, due to not being freely translatable')
             
         self.setTool()
+    
     
     def dragMult(self, mult):
         #as the mouse is dragging, update the position of each object by muliplying
@@ -162,3 +150,5 @@ if __name__ == '__main__': drag()
 # Revision 1: 2012-03-12 : First publish.
 #
 # Revision 2: 2014-03-01 : adding category
+#
+# Revision 3: 2016-12-10 : Removing euclid dependency

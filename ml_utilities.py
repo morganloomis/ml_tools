@@ -5,7 +5,7 @@
 #    / __ `__ \/ /  Licensed under Creative Commons BY-SA
 #   / / / / / / /  http://creativecommons.org/licenses/by-sa/3.0/
 #  /_/ /_/ /_/_/  _________                                   
-#               /_________/  Revision 26, 2016-12-05
+#               /_________/  Revision 27, 2016-12-10
 #      _______________________________
 # - -/__ Installing Python Scripts __/- - - - - - - - - - - - - - - - - - - - 
 # 
@@ -34,13 +34,13 @@
 __author__ = 'Morgan Loomis'
 __license__ = 'Creative Commons Attribution-ShareAlike'
 __category__ = 'animationScripts'
-__revision__ = 26
+__revision__ = 27
 
 import maya.cmds as mc
 import maya.mel as mm
 from maya import OpenMaya
 from functools import partial
-import shutil, os, re, sys
+import shutil, os, re, sys, math
 
 #declare some variables
 websiteURL = 'http://morganloomis.com'
@@ -2113,6 +2113,113 @@ class UndoChunk():
             mc.undoInfo(closeChunk=True)
 
 
+class Vector:
+
+    def __init__(self, x=0, y=0, z=0):
+        '''
+        Initialize the vector with 3 values, or else 
+        '''
+        
+        if self._isCompatible(x):
+            x = x[0]
+            y = x[1]
+            z = x[2]
+        self.x = x
+        self.y = y
+        self.z = z
+
+    def __repr__(self):
+        return 'Vector({0:.2f}, {1:.2f}, {2:.2f})'.format(*self)
+    
+    #iterator methods
+    def __iter__(self):
+        return iter((self.x, self.y, self.z))
+
+    def __getitem__(self, key):
+        return (self.x, self.y, self.z)[key]
+
+    def __setitem__(self, key, value):
+        [self.x, self.y, self.z][key] = value
+
+    def __len__(self):
+        return 3
+
+    def _isCompatible(self, other):
+        '''
+        Return true if the provided argument is a vector
+        '''
+        if isinstance(other,(Vector,list,tuple)) and len(other)==3:
+            return True
+        return False
+    
+
+    def __add__(self, other):
+        
+        if not self._isCompatible(other):
+            raise TypeError('Can only add to another vector of the same dimension.')        
+        
+        return Vector(*[a+b for a,b in zip(self,other)])
+
+
+    def __sub__(self, other):
+        
+        if not self._isCompatible(other):
+            raise TypeError('Can only subtract another vector of the same dimension.')  
+        
+        return Vector(*[a-b for a,b in zip(self,other)])
+    
+    
+    def __mul__(self, other):
+        
+        if self._isCompatible(other):
+            return Vector(*[a*b for a,b in zip(self,other)])
+        elif isinstance(other, (float,int,long)):
+            return Vector(*[x*float(other) for x in self])
+        else:
+            raise TypeError("Can't multiply {} with {}".format(self, other))
+        
+        
+    def __div__(self, other):
+        if isinstance(other, (float,int,long)):
+            return Vector(*[x/float(other) for x in self])
+        else:
+            raise TypeError("Can't divide {} by {}".format(self, other))
+
+
+    def magnitude(self):
+        return math.sqrt(sum([x**2 for x in self]))
+
+
+    def normalize(self):
+        d = self.magnitude()
+        if d:
+            self.x /= d
+            self.y /= d
+            self.z /= d
+        return self
+
+
+    def normalized(self):
+        d = self.magnitude()
+        if d:
+            return self/d
+        return self
+        
+
+    def dot(self, other):
+        if not self._isCompatible(other):
+            raise TypeError('Can only perform dot product with another Vector object of equal dimension.')
+        return sum([a*b for a,b in zip(self,other)])
+
+
+    def cross(self, other):
+        if not self._isCompatible(other):
+            raise TypeError('Can only perform cross product with another Vector object of equal dimension.')
+        return Vector(self.y * other.z - self.z * other.y,
+                       -self.x * other.z + self.z * other.x,
+                       self.x * other.y - self.y * other.x)
+
+    
 #      ______________________
 # - -/__ Revision History __/- - - - - - - - - - - - - - - - - - - - - - - - 
 #
@@ -2169,3 +2276,5 @@ class UndoChunk():
 # Revision 25: 2016-11-21 : silly icon path bug
 #
 # Revision 26: 2016-12-05 : Adding getSkinCluster
+#
+# Revision 27: 2016-12-10 : Adding Vector class to remove euclid dependency

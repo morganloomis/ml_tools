@@ -5,7 +5,7 @@
 #    / __ `__ \/ /  Licensed under Creative Commons BY-SA
 #   / / / / / / /  http://creativecommons.org/licenses/by-sa/3.0/
 #  /_/ /_/ /_/_/  _________                                   
-#               /_________/  Revision 4, 2014-03-01
+#               /_________/  Revision 5, 2016-12-10
 #      _______________________________
 # - -/__ Installing Python Scripts __/- - - - - - - - - - - - - - - - - - - - 
 # 
@@ -45,8 +45,6 @@
 #      __________________
 # - -/__ Requirements __/- - - - - - - - - - - - - - - - - - - - - - - - - - 
 # 
-# This script requires the euclid module, which can be downloaded here:
-# 	http://partiallydisassembled.net/euclid.html
 # This script requires the ml_utilities module, which can be downloaded here:
 # 	http://morganloomis.com/wiki/tools.html#ml_utilities
 #                                                             __________
@@ -54,26 +52,15 @@
 __author__ = 'Morgan Loomis'
 __license__ = 'Creative Commons Attribution-ShareAlike'
 __category__ = 'animationScripts'
-__revision__ = 4
+__revision__ = 5
 import maya.cmds as mc
 import maya.mel as mm
 from maya import OpenMaya
 import random
 
 try:
-    import euclid
-except ImportError:
-    result = mc.confirmDialog( title='Module Not Found', 
-                message='This tool requires the euclid module, which can be downloaded for free from the internet. Once downloaded you will need to restart Maya.', 
-                button=['Go To Website','Cancel'], 
-                defaultButton='Cancel', cancelButton='Cancel', dismissString='Cancel' )
-    
-    if result != 'Cancel':
-        mc.showHelp('http://partiallydisassembled.net/euclid.html',absolute=True)
-
-try:
     import ml_utilities as utl
-    utl.upToDateCheck(9)
+    utl.upToDateCheck(27)
 except ImportError:
     result = mc.confirmDialog( title='Module Not Found', 
                 message='This tool requires the ml_utilities module. Once downloaded you will need to restart Maya.', 
@@ -83,10 +70,9 @@ except ImportError:
     if result == 'Download Module':
         mc.showHelp('http://morganloomis.com/download/animationScripts/ml_utilities.py',absolute=True)
     
-
 def ui():
     '''
-    User interface for world bake
+    User interface for arc tracer
     '''
 
     with utl.MlUi('ml_arcTracer', 'Arc Tracer', width=400, height=180, info='''Select objects to trace.
@@ -212,148 +198,175 @@ def traceArc(space='camera'):
         mc.setAttr(group[i]+'.rotate', 0,0,0)
     
     with utl.UndoChunk():
-        with utl.IsolateViews():
-
-            #helper locator
-            loc = mc.spaceLocator()[0]
-            mc.parent(loc,parentGrp)
+    
+        #helper locator
+        loc = mc.spaceLocator()[0]
+        mc.parent(loc,parentGrp)
+        
+        camSample = None
+        if space=='camera':
+            camSample = mc.spaceLocator()[0]
+            mc.pointConstraint(cam, camSample)
+        
+        for i,obj in enumerate(objs):
+            sample = mc.spaceLocator()[0]
+            mc.pointConstraint(obj, sample)
 
             #frame loop:
             time = range(int(start),int(end+1))
             for t in time:
-                mc.currentTime(t, edit=True)
+                objPnt = list()
+                for attr in ('.tx','.ty','.tz'):
+                    mSelectionList = OpenMaya.MSelectionList()
+                    mSelectionList.add(sample+attr)
+                    plug = OpenMaya.MPlug()
+                    mSelectionList.getPlug(0, plug)
+                    context = OpenMaya.MDGContext(OpenMaya.MTime(t))
+                    objPnt.append(plug.asDouble(context))
+                
+                if space=='camera':
+                    camPnt = list()
+                    for attr in ('.tx','.ty','.tz'):
+                        mSelectionList = OpenMaya.MSelectionList()
+                        mSelectionList.add(camSample+attr)
+                        plug = OpenMaya.MPlug()
+                        mSelectionList.getPlug(0, plug)
+                        context = OpenMaya.MDGContext(OpenMaya.MTime(t))
+                        camPnt.append(plug.asDouble(context))
+                        
+                    #camPnt = mc.xform(cam, query=True, worldSpace=True, rotatePivot=True)
 
-                #object loop
-                for i,obj in enumerate(objs):
+                    objVec = utl.Vector(objPnt[0],objPnt[1],objPnt[2])
+                    camVec = utl.Vector(camPnt[0],camPnt[1],camPnt[2])
 
-                    objPnt = mc.xform(obj, query=True, worldSpace=True, rotatePivot=True)
+                    vec = objVec-camVec
+                    vec.normalize()
+                    #multiply here to offset from camera
+                    vec=vec*nearClipPlane*1.2
+                    vec+=camVec
 
-                    if space=='camera':
-                        camPnt = mc.xform(cam, query=True, worldSpace=True, rotatePivot=True)
+                    mc.xform(loc, worldSpace=True, translation=vec[:])
 
-                        objVec = euclid.Vector3(objPnt[0],objPnt[1],objPnt[2])
-                        camVec = euclid.Vector3(camPnt[0],camPnt[1],camPnt[2])
+                    trans = mc.getAttr(loc+'.translate')
+                    points[i].append(trans[0]) 
 
-                        vec = objVec-camVec
-                        vec.normalize()
-                        #multiply here to offset from camera
-                        vec=vec*nearClipPlane*1.2
-                        vec+=camVec
+                elif space=='world':
+                    points[i].append(objPnt)
+                    
+            mc.delete(sample)
 
-                        mc.xform(loc, worldSpace=True, translation=vec[:])
+        mc.delete(loc)
+        if camSample:
+            mc.delete(camSample)
 
-                        trans = mc.getAttr(loc+'.translate')
-                        points[i].append(trans[0]) 
+        #create the curves and do paint effects
+        mc.ResetTemplateBrush()
+        brush = mc.getDefaultBrush()
+        mc.setAttr(brush+'.screenspaceWidth',1)
+        mc.setAttr(brush+'.distanceScaling',0)
+        mc.setAttr(brush+'.brushWidth',0.005)
 
-                    elif space=='world':
-                        points[i].append(objPnt)
+        for i,obj in enumerate(objs):
 
-            mc.delete(loc)
-
-            #create the curves and do paint effects
-            mc.ResetTemplateBrush()
-            brush = mc.getDefaultBrush()
+            #setup brush for path
             mc.setAttr(brush+'.screenspaceWidth',1)
             mc.setAttr(brush+'.distanceScaling',0)
-            mc.setAttr(brush+'.brushWidth',0.005)
+            mc.setAttr(brush+'.brushWidth',0.003)
 
-            for i,obj in enumerate(objs):
+            #color
+            for c in ('R','G','B'):
+                color = random.uniform(0.3,0.7)
+                mc.setAttr(brush+'.color1'+c,color)
+            
+            baseCurve = mc.curve(d=3,p=points[i])
+            #fitBspline makes a curve that goes THROUGH the points, a more accurate path
+            curve = mc.fitBspline(baseCurve, constructionHistory=False, tolerance=0.001)
+            mc.delete(baseCurve)
 
-                #setup brush for path
-                mc.setAttr(brush+'.screenspaceWidth',1)
-                mc.setAttr(brush+'.distanceScaling',0)
-                mc.setAttr(brush+'.brushWidth',0.003)
+            #paint fx
+            mc.AttachBrushToCurves(curve)
+            stroke = mc.ls(sl=True)[0]
+            stroke = mc.parent(stroke,group[i])[0]
 
-                #color
-                for c in ('R','G','B'):
-                    color = random.uniform(0.3,0.7)
-                    mc.setAttr(brush+'.color1'+c,color)
-                
-                baseCurve = mc.curve(d=3,p=points[i])
-                #fitBspline makes a curve that goes THROUGH the points, a more accurate path
-                curve = mc.fitBspline(baseCurve, constructionHistory=False, tolerance=0.001)
-                mc.delete(baseCurve)
+            mc.setAttr(stroke+'.overrideEnabled',1)
+            mc.setAttr(stroke+'.overrideDisplayType',2)
 
-                #paint fx
+            mc.setAttr(stroke+'.displayPercent',92)
+            mc.setAttr(stroke+'.sampleDensity',0.5)
+            mc.setAttr(stroke+'.inheritsTransform',0)
+            mc.setAttr(stroke+'.translate',0,0,0)
+            mc.setAttr(stroke+'.rotate',0,0,0)
+
+            curve = mc.parent(curve,group[i])[0]
+            mc.setAttr(curve+'.translate',0,0,0)
+            mc.setAttr(curve+'.rotate',0,0,0)
+
+            mc.hide(curve)
+
+            #setup brush for tics
+            if space=='camera':
+                mc.setAttr(brush+'.brushWidth',0.008)
+            if space=='world':
+                mc.setAttr(brush+'.brushWidth',0.005)
+            mc.setAttr(brush+'.color1G',0)
+            mc.setAttr(brush+'.color1B',0)
+
+            for t in range(len(points[i])):
+                frameCurve = None
+                if space=='camera':
+                    vec = utl.Vector(points[i][t][0],points[i][t][1],points[i][t][2])
+                    vec*=0.98
+                    frameCurve = mc.curve(d=1,p=[points[i][t],vec[:]])
+
+                elif space=='world':
+                    frameCurve = mc.circle(constructionHistory=False, radius=0.0001, sections=4)[0]
+                    mc.setAttr(frameCurve+'.translate', points[i][t][0], points[i][t][1] ,points[i][t][2])
+                    constraint = mc.tangentConstraint(curve, frameCurve, aimVector=(0,0,1), worldUpType='scene')
+                    #mc.delete(constraint)
+
+                #check for keyframe
+                colorAttribute='color1G'
+                if mc.keyframe(obj, time=((t+start-0.5),(t+start+0.5)), query=True):
+                    mc.setAttr(brush+'.color1R',1)
+                else:
+                    mc.setAttr(brush+'.color1R',0)
+
                 mc.AttachBrushToCurves(curve)
+
                 stroke = mc.ls(sl=True)[0]
+                thisBrush = mc.listConnections(stroke+'.brush', destination=False)[0]
+
+                #setup keyframes for frame highlighting
+                mc.setKeyframe(thisBrush, attribute='color1G', value=0, time=(start+t-1, start+t+1))
+                mc.setKeyframe(thisBrush, attribute='color1G', value=1, time=(start+t,))
+
                 stroke = mc.parent(stroke,group[i])[0]
 
-                mc.setAttr(stroke+'.overrideEnabled',1)
-                mc.setAttr(stroke+'.overrideDisplayType',2)
+                mc.hide(frameCurve)
 
                 mc.setAttr(stroke+'.displayPercent',92)
                 mc.setAttr(stroke+'.sampleDensity',0.5)
-                mc.setAttr(stroke+'.inheritsTransform',0)
-                mc.setAttr(stroke+'.translate',0,0,0)
-                mc.setAttr(stroke+'.rotate',0,0,0)
 
-                curve = mc.parent(curve,group[i])[0]
-                mc.setAttr(curve+'.translate',0,0,0)
-                mc.setAttr(curve+'.rotate',0,0,0)
+                frameCurve = mc.parent(frameCurve,group[i])[0]
 
-                mc.hide(curve)
-
-                #setup brush for tics
                 if space=='camera':
-                    mc.setAttr(brush+'.brushWidth',0.008)
-                if space=='world':
-                    mc.setAttr(brush+'.brushWidth',0.005)
-                mc.setAttr(brush+'.color1G',0)
-                mc.setAttr(brush+'.color1B',0)
+                    mc.setAttr(stroke+'.inheritsTransform',0)
+                    mc.setAttr(stroke+'.pressureScale[1].pressureScale_Position', 1)
+                    mc.setAttr(stroke+'.pressureScale[1].pressureScale_FloatValue', 0)
+                    mc.setAttr(stroke+'.translate',0,0,0)
+                    mc.setAttr(stroke+'.rotate',0,0,0)
+                    mc.setAttr(frameCurve+'.translate',0,0,0)
+                    mc.setAttr(frameCurve+'.rotate',0,0,0)
 
-                for t in range(len(points[i])):
-                    frameCurve = None
-                    if space=='camera':
-                        vec = euclid.Vector3(points[i][t][0],points[i][t][1],points[i][t][2])
-                        vec*=0.98
-                        frameCurve = mc.curve(d=1,p=[points[i][t],vec[:]])
-
-                    elif space=='world':
-                        frameCurve = mc.circle(constructionHistory=False, radius=0.0001, sections=4)[0]
-                        mc.setAttr(frameCurve+'.translate', points[i][t][0], points[i][t][1] ,points[i][t][2])
-                        constraint = mc.tangentConstraint(curve, frameCurve, aimVector=(0,0,1), worldUpType='scene')
-                        #mc.delete(constraint)
-
-                    #check for keyframe
-                    colorAttribute='color1G'
-                    if mc.keyframe(obj, time=((t+start-0.5),(t+start+0.5)), query=True):
-                        mc.setAttr(brush+'.color1R',1)
-                    else:
-                        mc.setAttr(brush+'.color1R',0)
-
-                    mc.AttachBrushToCurves(curve)
-
-                    stroke = mc.ls(sl=True)[0]
-                    thisBrush = mc.listConnections(stroke+'.brush', destination=False)[0]
-
-                    #setup keyframes for frame highlighting
-                    mc.setKeyframe(thisBrush, attribute='color1G', value=0, time=(start+t-1, start+t+1))
-                    mc.setKeyframe(thisBrush, attribute='color1G', value=1, time=(start+t,))
-
-                    stroke = mc.parent(stroke,group[i])[0]
-
-                    mc.hide(frameCurve)
-
-                    mc.setAttr(stroke+'.displayPercent',92)
-                    mc.setAttr(stroke+'.sampleDensity',0.5)
-
-                    frameCurve = mc.parent(frameCurve,group[i])[0]
-
-                    if space=='camera':
-                        mc.setAttr(stroke+'.inheritsTransform',0)
-                        mc.setAttr(stroke+'.pressureScale[1].pressureScale_Position', 1)
-                        mc.setAttr(stroke+'.pressureScale[1].pressureScale_FloatValue', 0)
-                        mc.setAttr(stroke+'.translate',0,0,0)
-                        mc.setAttr(stroke+'.rotate',0,0,0)
-                        mc.setAttr(frameCurve+'.translate',0,0,0)
-                        mc.setAttr(frameCurve+'.rotate',0,0,0)
-
-            mc.currentTime(origTime, edit=True)
-            panel = mc.getPanel(withFocus=True)
+        mc.currentTime(origTime, edit=True)
+        panel = mc.getPanel(withFocus=True)
+        try:
             mc.modelEditor(panel, edit=True, strokes=True)
+        except:
+            pass
     
     mc.select(objs,replace=True)
+    
 
 
 def retraceArc(*args):
@@ -398,6 +411,7 @@ def applyBrush(curve, parent):
     
     return stroke
 
+if __name__ == '__main__':ui()
 
 #      ______________________
 # - -/__ Revision History __/- - - - - - - - - - - - - - - - - - - - - - - - 
@@ -409,3 +423,5 @@ def applyBrush(curve, parent):
 # Revision 3: 2011-05-14 : Revision notes update.
 #
 # Revision 4: 2014-03-01 : adding category
+#
+# Revision 5: 2016-12-10 : removing euclid dependency
