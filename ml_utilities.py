@@ -5,7 +5,7 @@
 #    / __ `__ \/ /  Licensed under Creative Commons BY-SA
 #   / / / / / / /  http://creativecommons.org/licenses/by-sa/3.0/
 #  /_/ /_/ /_/_/  _________                                   
-#               /_________/  Revision 27, 2016-12-10
+#               /_________/  Revision 28, 2017-03-20
 #      _______________________________
 # - -/__ Installing Python Scripts __/- - - - - - - - - - - - - - - - - - - - 
 # 
@@ -34,7 +34,7 @@
 __author__ = 'Morgan Loomis'
 __license__ = 'Creative Commons Attribution-ShareAlike'
 __category__ = 'animationScripts'
-__revision__ = 27
+__revision__ = 28
 
 import maya.cmds as mc
 import maya.mel as mm
@@ -491,6 +491,35 @@ def getNamespace(node):
     return namespace
 
 
+def getRoots(nodes):
+    
+    objs = mc.ls(nodes, long=True)
+    tops = list()
+    namespaces = list()
+    for obj in objs:
+        namespace = getNamespace(obj)
+        if namespace in namespaces:
+            #we've already done this one
+            continue
+
+        hier = obj.split('|')
+        if not namespace:
+            #if there's no namespace, just grab the top of the hierarchy
+            if len(hier) > 1:
+                tops.append(hier[1])
+            else:
+                tops.append(obj)
+
+        else:
+            #otherwise look through the hierarchy until you find the first node with the same namespace
+            namespaces.append(namespace)
+            for each in hier:
+                if each.startswith(namespace):
+                    tops.append(each)
+                    break
+    return tops
+
+
 def getSelectedChannels():
     '''
     Return channels that are selected in the channelbox
@@ -648,8 +677,8 @@ def matchBake(source=None, destination=None, bakeOnOnes=False, maintainOffset=Fa
                     itt[d][a] = mc.keyTangent(s, attribute=a, time=(start,end), query=True, inTangentType=True)
                     ott[d][a] = mc.keyTangent(s, attribute=a, time=(start,end), query=True, outTangentType=True)
                 except RuntimeError as err:
-                    itt[d][a] = ['auto'] * len(currKeyTimes)
-                    ott[d][a] = ['auto'] * len(currKeyTimes)
+                    itt[d][a] = ['auto'] * len(currKeytimes)
+                    ott[d][a] = ['auto'] * len(currKeytimes)
                     
                 if preserveTangentWeight and mc.keyTangent(s, attribute=a, query=True, weightedTangents=True)[0]:
                     weighted[d][a] = True
@@ -812,13 +841,20 @@ def renderShelfIcon(name='tmp', width=32, height=32):
     return image
 
 
-def setAnimValue(plug, value):
+def setAnimValue(plug, value, tangentType=None):
     '''
     Sets key if the channel is keyed, otherwise setAttr
     '''
 
     if mc.keyframe(plug, query=True, name=True):
         mc.setKeyframe(plug, value=value)
+        if tangentType:
+            time = mc.currentTime(query=True)
+            itt = tangentType
+            ott = tangentType
+            if tangentType == 'step':
+                itt = 'linear'
+            mc.keyTangent(plug, time=(time,), edit=True, itt=itt, ott=ott)                                            
 
     mc.setAttr(plug, value)
 
@@ -1329,32 +1365,9 @@ class KeySelection(object):
 
         if not self.nodeSelection:
             return False
-
-        objs = mc.ls(self.nodeSelection, long=True)
-        tops = list()
-        namespaces = list()
-        for obj in objs:
-            namespace = getNamespace(obj)
-            if namespace in namespaces:
-                #we've already done this one
-                continue
-
-            hier = obj.split('|')
-            if not namespace:
-                #if there's no namespace, just grab the top of the hierarchy
-                if len(hier) > 1:
-                    tops.append(hier[1])
-                else:
-                    tops.append(obj)
-
-            else:
-                #otherwise look through the hierarchy until you find the first node with the same namespace
-                namespaces.append(namespace)
-                for each in hier:
-                    if namespace in each:
-                        tops.append(each)
-                        break
-
+        
+        tops = getRoots(self.nodeSelection)
+        
         if not tops:
             #if we haven't been sucessful, we're done
             return False
@@ -2278,3 +2291,5 @@ class Vector:
 # Revision 26: 2016-12-05 : Adding getSkinCluster
 #
 # Revision 27: 2016-12-10 : Adding Vector class to remove euclid dependency
+#
+# Revision 28: 2017-03-20 : bug fix and support for ml_puppet
