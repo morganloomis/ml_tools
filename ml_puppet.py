@@ -5,7 +5,7 @@
 #    / __ `__ \/ /  Licensed under Creative Commons BY-SA
 #   / / / / / / /  http://creativecommons.org/licenses/by-sa/3.0/
 #  /_/ /_/ /_/_/  _________                                   
-#               /_________/  Revision 15, 2017-04-06
+#               /_________/  Revision 16, 2017-04-23
 #      _______________________________
 # - -/__ Installing Python Scripts __/- - - - - - - - - - - - - - - - - - - - 
 # 
@@ -44,7 +44,7 @@
 __author__ = 'Morgan Loomis'
 __license__ = 'Creative Commons Attribution-ShareAlike'
 __category__ = 'animationScripts'
-__revision__ = 15
+__revision__ = 16
 
 import maya.cmds as mc
 import maya.mel as mm
@@ -853,11 +853,11 @@ def getSpaceSwitchData(node):
             enumValues = mc.attributeQuery(spaceEnum, node=node, listEnum=True)
         elif 'SpaceSwitch' in attr:
             baseName = attr.replace('SpaceSwitch','')
-            if mc.attributeQuery(baseName+'Space', node=node, exists=True):
+            if baseName + 'Space' in attrs:
                 spaceEnum = baseName+'Space'
-            elif not 'spaceSwitch' in ssAttrs and 'space' in attrs:
-                spaceEnum = 'space'
-            if spaceEnum:
+            else:
+                spaceEnum = attr
+            if spaceEnum in attrs and mc.attributeQuery(spaceEnum, node=node, attributeType=True) == 'enum':
                 enumValues = mc.attributeQuery(spaceEnum, node=node, listEnum=True)
         if not enumValues:
             continue
@@ -1277,3 +1277,5 @@ def flipAnimation(nodes, *args):
 # Revision 14: 2017-03-28 : removing hide all sets, maya not allow
 #
 # Revision 15: 2017-04-06 : Context menu bug fixes and additional features.
+#
+# Revision 16: 2017-04-23 : Space Switch context menu bug fix
