@@ -5,7 +5,7 @@
 #    / __ `__ \/ /  Licensed under Creative Commons BY-SA
 #   / / / / / / /  http://creativecommons.org/licenses/by-sa/3.0/
 #  /_/ /_/ /_/_/  _________                                   
-#               /_________/  Revision 28, 2017-03-20
+#               /_________/  Revision 29, 2017-04-25
 #      _______________________________
 # - -/__ Installing Python Scripts __/- - - - - - - - - - - - - - - - - - - - 
 # 
@@ -34,7 +34,7 @@
 __author__ = 'Morgan Loomis'
 __license__ = 'Creative Commons Attribution-ShareAlike'
 __category__ = 'animationScripts'
-__revision__ = 28
+__revision__ = 29
 
 import maya.cmds as mc
 import maya.mel as mm
@@ -605,7 +605,7 @@ def longestCommonSubstring(data):
     return substr
 
 
-def matchBake(source=None, destination=None, bakeOnOnes=False, maintainOffset=False, preserveTangentWeight=True, translate=True, rotate=True):
+def matchBake(source=None, destination=None, bakeOnOnes=False, maintainOffset=False, preserveTangentWeight=True, translate=True, rotate=True, start=None, end=None):
 
     if not source and not destination:
         sel = mc.ls(sl=True)
@@ -619,7 +619,8 @@ def matchBake(source=None, destination=None, bakeOnOnes=False, maintainOffset=Fa
     resetTime = mc.currentTime(query=True)
 
     #frame range
-    start, end = frameRange()
+    if start == None or end == None:
+        start, end = frameRange()
 
     attributes = list()
     if translate:
@@ -2293,3 +2294,5 @@ class Vector:
 # Revision 27: 2016-12-10 : Adding Vector class to remove euclid dependency
 #
 # Revision 28: 2017-03-20 : bug fix and support for ml_puppet
+#
+# Revision 29: 2017-04-25 : matchBake support input frames

@@ -5,7 +5,7 @@
 #    / __ `__ \/ /  Licensed under Creative Commons BY-SA
 #   / / / / / / /  http://creativecommons.org/licenses/by-sa/3.0/
 #  /_/ /_/ /_/_/  _________                                   
-#               /_________/  Revision 16, 2017-04-23
+#               /_________/  Revision 17, 2017-04-25
 #      _______________________________
 # - -/__ Installing Python Scripts __/- - - - - - - - - - - - - - - - - - - - 
 # 
@@ -44,7 +44,7 @@
 __author__ = 'Morgan Loomis'
 __license__ = 'Creative Commons Attribution-ShareAlike'
 __category__ = 'animationScripts'
-__revision__ = 16
+__revision__ = 17
 
 import maya.cmds as mc
 import maya.mel as mm
@@ -53,7 +53,7 @@ import math, re, warnings
 
 try:
     import ml_utilities as utl
-    utl.upToDateCheck(28)
+    utl.upToDateCheck(29)
 except ImportError:
     result = mc.confirmDialog( title='Module Not Found', 
                 message='This tool requires the ml_utilities module. Once downloaded you will need to restart Maya.', 
@@ -465,6 +465,13 @@ def fkIkSwitch(nodes=None, switchTo=None, switchRange=False, bakeOnOnes=False):
 
         if elemDict[elem]['switchTo'] == 1:
             #ik
+            
+            #key fk controls to preserve position
+            if switchRange:
+                mc.setKeyframe(data['fkChain'], animated=True, insert=True, time=(start,end))
+            else:
+                mc.setKeyframe(data['fkChain'], animated=True)
+            
             for a, b in zip(data['ikControls'], data['ikMatchTo']):
                 locator = mc.spaceLocator(name='TEMP#')[0]
                 snap(locator, b)
@@ -509,6 +516,15 @@ def fkIkSwitch(nodes=None, switchTo=None, switchRange=False, bakeOnOnes=False):
 
         else:
             #fk
+        
+            #key ik controls to preserve position
+            controls = list(data['ikControls'])
+            controls.append(data['pvControl'])
+            if switchRange:
+                mc.setKeyframe(controls, animated=True, insert=True, time=(start,end))
+            else:
+                mc.setKeyframe(controls, animated=True)
+            
             for x in data['baseChain']:
                 locator = mc.spaceLocator(name='TEMP#')[0]
                 snap(locator, x)
@@ -518,8 +534,6 @@ def fkIkSwitch(nodes=None, switchTo=None, switchRange=False, bakeOnOnes=False):
             matchControls.extend(data['fkChain'])
 
             if switchRange:
-                controls = list(data['ikControls'])
-                controls.append(data['pvControl'])
                 keytimes = mc.keyframe(controls, time=(start,end), query=True, timeChange=True)
                 if keytimes:
                     elemDict[elem]['keytimes'] = list(set(keytimes))
@@ -530,7 +544,7 @@ def fkIkSwitch(nodes=None, switchTo=None, switchRange=False, bakeOnOnes=False):
             selection.append(data['fkChain'][0])
 
     if switchRange:
-        utl.matchBake(matchTo, matchLocators, bakeOnOnes=True, maintainOffset=True)
+        utl.matchBake(matchTo, matchLocators, bakeOnOnes=True, maintainOffset=True, start=start, end=end)
 
         #if switching to ik, reset ik control attributes
         for elem in elems:
@@ -542,13 +556,21 @@ def fkIkSwitch(nodes=None, switchTo=None, switchRange=False, bakeOnOnes=False):
                             continue
                         if mc.getAttr(x+'.'+attr, lock=True):
                             continue
-                        default = mc.attributeQuery(attr, listDefault=True, node=x)[0]
+                        default = mc.attributeQuery(attr, listDefault=True, node=x)
+                        if not default:
+                            default = 0
+                        elif isinstance(default, list):
+                            default = default[0]
                         if mc.keyframe(x+'.'+attr, query=True, name=True):
-                            mc.cutKey(x+'.'+attr)
-                            mc.setKeyframe(x+'.'+attr)
-                        utl.setAnimValue(x+'.'+attr, default)
-
-        utl.matchBake(matchLocators, matchControls, bakeOnOnes=True)
+                            mc.cutKey(x+'.'+attr, time=(start, end), includeUpperBound=False)
+                            mc.setKeyframe(x+'.'+attr, time=(start,end), value=default)
+                            
+                        else:
+                            try:
+                                utl.setAnimValue(x+'.'+attr, default)
+                            except Exception:
+                                pass
+        utl.matchBake(matchLocators, matchControls, bakeOnOnes=True, start=start, end=end)
     else:
         #if switching to ik, reset ik control attributes
         for elem in elems:
@@ -1279,3 +1301,5 @@ def flipAnimation(nodes, *args):
 # Revision 15: 2017-04-06 : Context menu bug fixes and additional features.
 #
 # Revision 16: 2017-04-23 : Space Switch context menu bug fix
+#
+# Revision 17: 2017-04-25 : FK IK switching keying update
