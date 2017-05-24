@@ -5,7 +5,7 @@
 #    / __ `__ \/ /  Licensed under Creative Commons BY-SA
 #   / / / / / / /  http://creativecommons.org/licenses/by-sa/3.0/
 #  /_/ /_/ /_/_/  _________                                   
-#               /_________/  Revision 17, 2017-04-25
+#               /_________/  Revision 17, 2017-05-24
 #      _______________________________
 # - -/__ Installing Python Scripts __/- - - - - - - - - - - - - - - - - - - - 
 # 
@@ -475,11 +475,17 @@ def fkIkSwitch(nodes=None, switchTo=None, switchRange=False, bakeOnOnes=False):
             for a, b in zip(data['ikControls'], data['ikMatchTo']):
                 locator = mc.spaceLocator(name='TEMP#')[0]
                 snap(locator, b)
-
+                
                 #flip the locator if the control's parent is scaled in -X
-                parent = mc.listRelatives(a, parent=True)
-                if parent and mc.getAttr(parent[0]+'.scaleX') < 0:
-                    mc.setAttr(locator+'.rotateX', mc.getAttr(locator+'.rotateX') + 180)
+                #arbitrarily look up 3 parents
+                parent = mc.listRelatives(a, parent=True, pa=True)
+                for null in range(3):
+                    if not parent:
+                        break
+                    if mc.getAttr(parent[0]+'.scaleX') < 0:
+                        mc.setAttr(locator+'.rotateX', mc.getAttr(locator+'.rotateX') + 180)
+                        break
+                    parent = mc.listRelatives(parent[0], parent=True, pa=True)
 
                 matchLocators.append(locator)
 
@@ -1303,3 +1309,5 @@ def flipAnimation(nodes, *args):
 # Revision 16: 2017-04-23 : Space Switch context menu bug fix
 #
 # Revision 17: 2017-04-25 : FK IK switching keying update
+#
+# Revision 17: 2017-05-24 : search higher for mirrored nodes when matching
