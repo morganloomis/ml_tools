@@ -5,7 +5,7 @@
 #    / __ `__ \/ /  Licensed under Creative Commons BY-SA
 #   / / / / / / /  http://creativecommons.org/licenses/by-sa/3.0/
 #  /_/ /_/ /_/_/  _________                                   
-#               /_________/  Revision 17, 2017-05-24
+#               /_________/  Revision 17, 2017-06-04
 #      _______________________________
 # - -/__ Installing Python Scripts __/- - - - - - - - - - - - - - - - - - - - 
 # 
@@ -339,6 +339,18 @@ def snap(node, snapTo):
     mc.delete(dup)
 
 
+def hasFlippedParent(node, testRange=3):
+    
+    parent = mc.listRelatives(node, parent=True, pa=True)
+    for null in range(testRange):
+        if not parent:
+            return False
+        if mc.getAttr(parent[0]+'.scaleX') < 0:
+            return True
+        parent = mc.listRelatives(parent[0], parent=True, pa=True)
+    return False
+
+
 def fkIkData(element):
 
     #here's all the attributes we need:
@@ -477,15 +489,8 @@ def fkIkSwitch(nodes=None, switchTo=None, switchRange=False, bakeOnOnes=False):
                 snap(locator, b)
                 
                 #flip the locator if the control's parent is scaled in -X
-                #arbitrarily look up 3 parents
-                parent = mc.listRelatives(a, parent=True, pa=True)
-                for null in range(3):
-                    if not parent:
-                        break
-                    if mc.getAttr(parent[0]+'.scaleX') < 0:
-                        mc.setAttr(locator+'.rotateX', mc.getAttr(locator+'.rotateX') + 180)
-                        break
-                    parent = mc.listRelatives(parent[0], parent=True, pa=True)
+                if hasFlippedParent(a):
+                    mc.setAttr(locator+'.rotateX', mc.getAttr(locator+'.rotateX') + 180)
 
                 matchLocators.append(locator)
 
@@ -705,7 +710,12 @@ def switchSpace(nodes=None, toSpace=None, switchRange=False, bakeOnOnes=False):
 
         locator = mc.spaceLocator(name='TEMP#')[0]
         snap(locator, node)
+        
         #flip locator if we're going to or from a mirrored space
+        if hasFlippedParent(node):
+            mc.setAttr(locator+'.rotateX', mc.getAttr(locator+'.rotateX') + 180)
+
+        matchLocators.append(locator)        
         parent = mc.listRelatives(node, parent=True)
         if parent:
             if mc.getAttr(parent[0]+'.scaleX') < 0:
@@ -933,7 +943,22 @@ def puppetContextMenu(parent, node):
             append = 's'
         mc.menuItem(label='Reset Control'+append, command=ml_resetChannels.resetPuppetControl)
         mc.menuItem(divider=True)
-
+    
+    puppetAttributes = ['geometrySelectable','controlMode']
+    if puppet and puppetAttributes:
+        doAttrs = []
+        for attr in puppetAttributes:
+            if mc.attributeQuery(attr, node=puppet, exists=True):
+                doAttrs.append(attr)
+        
+        if doAttrs:
+            mc.menuItem(label='Puppet Settings', subMenu=True)
+            
+            for attr in doAttrs:
+                attributeMenuItem(puppet, attr)
+            
+            mc.setParent('..', menu=True)
+        
     #selection
     if element:
 
@@ -1038,6 +1063,29 @@ def puppetContextMenu(parent, node):
             mc.menuItem(label='Convert Rotate Order UI', command=partial(convertRotateOrderUI, nodes))
 
 
+def attributeMenuItem(node, attr):
+    
+    plug = node+'.'+attr
+    niceName = mc.attributeName(plug, nice=True)
+    
+    #get attribute type
+    attrType = mc.getAttr(plug, type=True)
+    
+    if attrType == 'enum':
+        listEnum = mc.attributeQuery(attr, node=node, listEnum=True)[0]
+        if not ':' in listEnum:
+            return
+        listEnum = listEnum.split(':')
+        mc.menuItem(label=niceName, subMenu=True)
+        for value, label in enumerate(listEnum):
+            mc.menuItem(label=label, command=partial(mc.setAttr, plug, value))
+        mc.setParent('..', menu=True)
+    elif attrType == 'bool':
+        value = mc.getAttr(plug)
+        label = 'Toggle '+ niceName
+        mc.menuItem(label=label, command=partial(mc.setAttr, plug, not value))
+    
+    
 def convertRotateOrderUI(nodes, *args):
     '''
     wrapper
@@ -1311,3 +1359,5 @@ def flipAnimation(nodes, *args):
 # Revision 17: 2017-04-25 : FK IK switching keying update
 #
 # Revision 17: 2017-05-24 : search higher for mirrored nodes when matching
+#
+# Revision 17: 2017-06-04 : adding puppet settings attributes
