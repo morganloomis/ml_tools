@@ -5,7 +5,7 @@
 #    / __ `__ \/ /  Licensed under Creative Commons BY-SA
 #   / / / / / / /  http://creativecommons.org/licenses/by-sa/3.0/
 #  /_/ /_/ /_/_/  _________                                   
-#               /_________/  Revision 29, 2017-04-25
+#               /_________/  Revision 30, 2017-06-13
 #      _______________________________
 # - -/__ Installing Python Scripts __/- - - - - - - - - - - - - - - - - - - - 
 # 
@@ -34,7 +34,7 @@
 __author__ = 'Morgan Loomis'
 __license__ = 'Creative Commons Attribution-ShareAlike'
 __category__ = 'animationScripts'
-__revision__ = 29
+__revision__ = 30
 
 import maya.cmds as mc
 import maya.mel as mm
@@ -50,7 +50,8 @@ wikiURL = websiteURL+'/wiki/tools.html'
 icon_path = os.path.join(os.path.dirname(__file__),'icons').replace('\\','/')
 if os.path.isdir(icon_path) and icon_path not in os.environ['XBMLANGPATH']:
     os.environ['XBMLANGPATH'] = os.pathsep.join((os.environ['XBMLANGPATH'],icon_path))
-    
+
+MAYA_VERSION = mm.eval('getApplicationVersionAsFloat')
 
 def _showHelpCommand(url):
     '''
@@ -213,7 +214,7 @@ def createHotkey(command, name, description='', python=True):
     Open up the hotkey editor to create a hotkey from the specified command
     '''
 
-    if mm.eval('getApplicationVersionAsFloat')>2015:
+    if MAYA_VERSION > 2015:
         print "Creating hotkeys currently doesn't work in the new hotkey editor."
         print "Here's the command, you'll have to make the hotkey yourself (sorry):"
         print command
@@ -229,7 +230,7 @@ def createHotkey(command, name, description='', python=True):
     mc.textField('HotkeyEditorDescriptionField', edit=True, text=description)
 
     if python:
-        if mm.eval('getApplicationVersionAsFloat') < 2013:
+        if MAYA_VERSION < 2013:
             command = 'python("'+command+'");'
         else: #2013 or above
             mc.radioButtonGrp('HotkeyEditorLanguageRadioGrp', edit=True, select=2)
@@ -269,10 +270,10 @@ def createShelfButton(command, label='', name=None, description='',
     shelfTab = gShelfTopLevel+'|'+shelfTab
 
     #add additional args depending on what version of maya we're in
-    kwargs = dict()
-    if mm.eval('getApplicationVersionAsFloat') >= 2009:
+    kwargs = {}
+    if MAYA_VERSION >= 2009:
         kwargs['commandRepeatable'] = True
-    if mm.eval('getApplicationVersionAsFloat') >= 2011:
+    if MAYA_VERSION >= 2011:
         kwargs['overlayLabelColor'] = labelColor
         kwargs['overlayLabelBackColor'] = labelBackgroundColor
         if backgroundColor:
@@ -435,7 +436,7 @@ def getHoldTangentType():
         return 'linear','linear'
     if tangentType=='step':
         return 'linear','step'
-    if tangentType == 'plateau' or tangentType == 'spline' or mm.eval('getApplicationVersionAsFloat') < 2012:
+    if tangentType == 'plateau' or tangentType == 'spline' or MAYA_VERSION < 2012:
         return 'plateau','plateau'
     return 'auto','auto'
 
@@ -447,7 +448,7 @@ def getIcon(name):
     '''
 
     ext = '.png'
-    if mm.eval('getApplicationVersionAsFloat') < 2011:
+    if MAYA_VERSION < 2011:
         ext = '.xpm'
 
     if not name.endswith('.png') and not name.endswith('.xpm'):
@@ -632,14 +633,14 @@ def matchBake(source=None, destination=None, bakeOnOnes=False, maintainOffset=Fa
         OpenMaya.MGlobal.displayWarning('No attributes to bake!')
         return
 
-    duplicates = dict()
-    keytimes = dict()
+    duplicates = {}
+    keytimes = {}
     constraint = list()
-    itt = dict()
-    ott = dict()
-    weighted = dict()
-    itw = dict()
-    otw = dict()
+    itt = {}
+    ott = {}
+    weighted = {}
+    itw = {}
+    otw = {}
     #initialize allKeyTimes with start and end frames, since they may not be keyed
     allKeyTimes = [start,end]
     for s,d in zip(source,destination):
@@ -656,12 +657,12 @@ def matchBake(source=None, destination=None, bakeOnOnes=False, maintainOffset=Fa
 
         #set up our data dictionaries
         duplicates[d] = dup
-        keytimes[d] = dict()
-        itt[d] = dict()
-        ott[d] = dict()
-        weighted[d] = dict()
-        itw[d] = dict()
-        otw[d] = dict()
+        keytimes[d] = {}
+        itt[d] = {}
+        ott[d] = {}
+        weighted[d] = {}
+        itw[d] = {}
+        otw[d] = {}
 
         #if we're baking on ones, we don't need keytimes
         if not bakeOnOnes:
@@ -811,10 +812,8 @@ def renderShelfIcon(name='tmp', width=32, height=32):
 
     mc.setAttr('defaultRenderGlobals.currentRenderer', 'mayaSoftware', type='string')
 
-    mayaVersion = mm.eval('getApplicationVersionAsFloat')
-
     imageFormat = 50 #XPM
-    if mayaVersion >= 2011:
+    if MAYA_VERSION >= 2011:
         imageFormat = 32 #PNG
 
     mc.setAttr('defaultRenderGlobals.imageFormat', imageFormat)
@@ -996,20 +995,24 @@ class IsolateViews():
     '''
 
     def __enter__(self):
-
-        self.sel = mc.ls(sl=True)
-        self.modelPanels = mc.getPanel(type='modelPanel')
-
-        #unfortunately there's no good way to know what's been isolated, so in this case if a view is isolated, skip it.
-        self.skip = list()
-        for each in self.modelPanels:
-            if mc.isolateSelect(each, query=True, state=True):
-                self.skip.append(each)
-
-        self.isolate(True)
-
-        mc.select(clear=True)
-
+        
+        if MAYA_VERSION >= 2016.5:
+            if not mc.ogs(query=True, pause=True):
+                mc.ogs(pause=True)
+        else:
+            self.sel = mc.ls(sl=True)
+            self.modelPanels = mc.getPanel(type='modelPanel')
+    
+            #unfortunately there's no good way to know what's been isolated, so in this case if a view is isolated, skip it.
+            self.skip = list()
+            for each in self.modelPanels:
+                if mc.isolateSelect(each, query=True, state=True):
+                    self.skip.append(each)
+    
+            self.isolate(True)
+    
+            mc.select(clear=True)
+    
         self.resetAutoKey = mc.autoKeyframe(query=True, state=True)
         mc.autoKeyframe(state=False)
 
@@ -1019,11 +1022,15 @@ class IsolateViews():
         #reset settings
         mc.autoKeyframe(state=self.resetAutoKey)
 
-        if self.sel:
-            mc.select(self.sel)
-
-        self.isolate(False)
-
+        if MAYA_VERSION >= 2016.5:
+            if mc.ogs(query=True, pause=True):
+                mc.ogs(pause=True)
+        else:        
+            if self.sel:
+                mc.select(self.sel)
+    
+            self.isolate(False)
+            
 
     def isolate(self, state):
 
@@ -1860,7 +1867,7 @@ class MlUi(object):
         mc.confirmDialog(title=self.name, message=text, button='Close')
 
 
-    def buttonWithPopup(self, label=None, command=None, annotation='', shelfLabel='', shelfIcon='render_useBackground', readUI_toArgs=dict()):
+    def buttonWithPopup(self, label=None, command=None, annotation='', shelfLabel='', shelfIcon='render_useBackground', readUI_toArgs={}):
         '''
         Create a button and attach a popup menu to a control with options to create a shelf button or a hotkey.
         The argCommand should return a kwargs dictionary that can be used as args for the main command.
@@ -1967,7 +1974,7 @@ class MlUi(object):
 
     class ButtonWithPopup():
 
-        def __init__(self, label=None, name=None, command=None, annotation='', shelfLabel='', shelfIcon='render_useBackground', readUI_toArgs=dict(), **kwargs):
+        def __init__(self, label=None, name=None, command=None, annotation='', shelfLabel='', shelfIcon='render_useBackground', readUI_toArgs={}, **kwargs):
             '''
             The fancy part of this object is the readUI_toArgs argument.
             '''
@@ -2117,7 +2124,7 @@ class UndoChunk():
 
     def __enter__(self):
         '''open the undo chunk'''
-        if self.force or mm.eval('getApplicationVersionAsFloat') < 2011:
+        if self.force or MAYA_VERSION < 2011:
             self.force = True
             mc.undoInfo(openChunk=True)
 
@@ -2296,3 +2303,5 @@ class Vector:
 # Revision 28: 2017-03-20 : bug fix and support for ml_puppet
 #
 # Revision 29: 2017-04-25 : matchBake support input frames
+#
+# Revision 30: 2017-06-13 : unify version test, isolate view update

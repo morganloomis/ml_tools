@@ -5,7 +5,7 @@
 #    / __ `__ \/ /  Licensed under Creative Commons BY-SA
 #   / / / / / / /  http://creativecommons.org/licenses/by-sa/3.0/
 #  /_/ /_/ /_/_/  _________                                   
-#               /_________/  Revision 17, 2017-06-04
+#               /_________/  Revision 17, 2017-06-13
 #      _______________________________
 # - -/__ Installing Python Scripts __/- - - - - - - - - - - - - - - - - - - - 
 # 
@@ -53,7 +53,7 @@ import math, re, warnings
 
 try:
     import ml_utilities as utl
-    utl.upToDateCheck(29)
+    utl.upToDateCheck(30)
 except ImportError:
     result = mc.confirmDialog( title='Module Not Found', 
                 message='This tool requires the ml_utilities module. Once downloaded you will need to restart Maya.', 
@@ -688,6 +688,7 @@ def switchSpace(nodes=None, toSpace=None, switchRange=False, bakeOnOnes=False):
     locators = []
     values = []
     for node in nodes:
+
         ssData = getSpaceSwitchData(node)
         if not ssData:
             continue
@@ -714,8 +715,7 @@ def switchSpace(nodes=None, toSpace=None, switchRange=False, bakeOnOnes=False):
         #flip locator if we're going to or from a mirrored space
         if hasFlippedParent(node):
             mc.setAttr(locator+'.rotateX', mc.getAttr(locator+'.rotateX') + 180)
-
-        matchLocators.append(locator)        
+     
         parent = mc.listRelatives(node, parent=True)
         if parent:
             if mc.getAttr(parent[0]+'.scaleX') < 0:
@@ -1361,3 +1361,5 @@ def flipAnimation(nodes, *args):
 # Revision 17: 2017-05-24 : search higher for mirrored nodes when matching
 #
 # Revision 17: 2017-06-04 : adding puppet settings attributes
+#
+# Revision 17: 2017-06-13 : space switch matching bug fix
