@@ -5,7 +5,7 @@
 #    / __ `__ \/ /  Licensed under Creative Commons BY-SA
 #   / / / / / / /  http://creativecommons.org/licenses/by-sa/3.0/
 #  /_/ /_/ /_/_/  _________                                   
-#               /_________/  Revision 1, 2016-06-21
+#               /_________/  Revision 2, 2017-06-26
 #      _______________________________
 # - -/__ Installing Python Scripts __/- - - - - - - - - - - - - - - - - - - - 
 # 
@@ -45,10 +45,14 @@
 __author__ = 'Morgan Loomis'
 __license__ = 'Creative Commons Attribution-ShareAlike'
 __category__ = 'animationScripts'
-__revision__ = 1
+__revision__ = 2
 
-from PySide import QtGui, QtCore
-import shiboken
+try:
+    from PySide2 import QtGui, QtCore
+    import shiboken2 as shiboken
+except ImportError:
+    from PySide import QtGui, QtCore
+    import shiboken
 
 import maya.OpenMaya as om
 import maya.OpenMayaUI as mui
@@ -56,7 +60,7 @@ import maya.cmds as mc
 
 try:
     import ml_utilities as utl
-    utl.upToDateCheck(19)
+    utl.upToDateCheck(30)
 except ImportError:
     result = mc.confirmDialog( title='Module Not Found', 
                 message='This tool requires the ml_utilities module. Once downloaded you will need to restart Maya.', 
@@ -284,3 +288,5 @@ if __name__ == '__main__':
 # - -/__ Revision History __/- - - - - - - - - - - - - - - - - - - - - - - -
 #
 # Revision 1: 2016-06-21 : First publish.
+#
+# Revision 2: 2017-06-26 : update for pySide2, maya 2017
