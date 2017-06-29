@@ -5,7 +5,7 @@
 #    / __ `__ \/ /  Licensed under Creative Commons BY-SA
 #   / / / / / / /  http://creativecommons.org/licenses/by-sa/3.0/
 #  /_/ /_/ /_/_/  _________                                   
-#               /_________/  Revision 17, 2017-06-13
+#               /_________/  Revision 21, 2017-06-29
 #      _______________________________
 # - -/__ Installing Python Scripts __/- - - - - - - - - - - - - - - - - - - - 
 # 
@@ -44,7 +44,7 @@
 __author__ = 'Morgan Loomis'
 __license__ = 'Creative Commons Attribution-ShareAlike'
 __category__ = 'animationScripts'
-__revision__ = 17
+__revision__ = 21
 
 import maya.cmds as mc
 import maya.mel as mm
@@ -239,7 +239,7 @@ def getElementsAbove(nodes=None):
     if not nodes:
         nodes = mc.ls(sl=True)
     for each in nodes:
-        if getNodeType(each) == 'element':
+        if getNodeType(each) in ['element','puppet']:
             elements.append(each)
         else:
             elem = getNodeTypeAbove(each, 'element')
@@ -1358,8 +1358,10 @@ def flipAnimation(nodes, *args):
 #
 # Revision 17: 2017-04-25 : FK IK switching keying update
 #
-# Revision 17: 2017-05-24 : search higher for mirrored nodes when matching
+# Revision 18: 2017-05-24 : search higher for mirrored nodes when matching
 #
-# Revision 17: 2017-06-04 : adding puppet settings attributes
+# Revision 19: 2017-06-04 : adding puppet settings attributes
 #
-# Revision 17: 2017-06-13 : space switch matching bug fix
+# Revision 20: 2017-06-13 : space switch matching bug fix
+#
+# Revision 21: 2017-06-29 : full context menu for puppet node

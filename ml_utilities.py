@@ -5,7 +5,7 @@
 #    / __ `__ \/ /  Licensed under Creative Commons BY-SA
 #   / / / / / / /  http://creativecommons.org/licenses/by-sa/3.0/
 #  /_/ /_/ /_/_/  _________                                   
-#               /_________/  Revision 30, 2017-06-13
+#               /_________/  Revision 31, 2017-06-30
 #      _______________________________
 # - -/__ Installing Python Scripts __/- - - - - - - - - - - - - - - - - - - - 
 # 
@@ -34,7 +34,7 @@
 __author__ = 'Morgan Loomis'
 __license__ = 'Creative Commons Attribution-ShareAlike'
 __category__ = 'animationScripts'
-__revision__ = 30
+__revision__ = 31
 
 import maya.cmds as mc
 import maya.mel as mm
@@ -389,15 +389,15 @@ def getCurrentCamera():
     if mc.getPanel(typeOf=panel) != 'modelPanel':
         OpenMaya.MGlobal.displayWarning('Please highlight a camera viewport.')
         return False
-
+    
     camShape = mc.modelEditor(panel, query=True, camera=True)
-
     if not camShape:
         return False
-
+    
+    camNodeType = mc.nodeType(camShape)
     if mc.nodeType(camShape) == 'transform':
         return camShape
-    elif mc.nodeType(camShape) == 'camera':
+    elif mc.nodeType(camShape) in ['camera','stereoRigCamera']:
         return mc.listRelatives(camShape, parent=True, path=True)[0]
 
 
@@ -2305,3 +2305,5 @@ class Vector:
 # Revision 29: 2017-04-25 : matchBake support input frames
 #
 # Revision 30: 2017-06-13 : unify version test, isolate view update
+#
+# Revision 31: 2017-06-30 : getCamera support for stereo camera

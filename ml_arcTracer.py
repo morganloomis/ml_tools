@@ -5,7 +5,7 @@
 #    / __ `__ \/ /  Licensed under Creative Commons BY-SA
 #   / / / / / / /  http://creativecommons.org/licenses/by-sa/3.0/
 #  /_/ /_/ /_/_/  _________                                   
-#               /_________/  Revision 5, 2016-12-10
+#               /_________/  Revision 6, 2017-06-30
 #      _______________________________
 # - -/__ Installing Python Scripts __/- - - - - - - - - - - - - - - - - - - - 
 # 
@@ -52,15 +52,16 @@
 __author__ = 'Morgan Loomis'
 __license__ = 'Creative Commons Attribution-ShareAlike'
 __category__ = 'animationScripts'
-__revision__ = 5
+__revision__ = 6
 import maya.cmds as mc
 import maya.mel as mm
 from maya import OpenMaya
-import random
+import random, math
+from functools import partial
 
 try:
     import ml_utilities as utl
-    utl.upToDateCheck(27)
+    utl.upToDateCheck(31)
 except ImportError:
     result = mc.confirmDialog( title='Module Not Found', 
                 message='This tool requires the ml_utilities module. Once downloaded you will need to restart Maya.', 
@@ -75,6 +76,10 @@ def ui():
     User interface for arc tracer
     '''
 
+    globalScale = 1
+    if mc.optionVar(exists='ml_arcTracer_brushGlobalScale'):
+        globalScale = mc.optionVar(query='ml_arcTracer_brushGlobalScale')       
+
     with utl.MlUi('ml_arcTracer', 'Arc Tracer', width=400, height=180, info='''Select objects to trace.
 Choose camera space or worldspace arc.
 Press clear to delete the arcs, or retrace to redo the last arc.''') as win:
@@ -87,7 +92,17 @@ Press clear to delete the arcs, or retrace to redo the last arc.''') as win:
                             shelfLabel='retrace', shelfIcon='flowPathObj')
         win.buttonWithPopup(label='Clear Arcs', command=clearArcs, annotation='Clear all arcs.', 
                             shelfLabel='clear', shelfIcon='flowPathObj')
-
+        fsg = mc.floatSliderGrp( label='Line Width', minValue=0.1, maxValue=5, value=globalScale)
+        mc.floatSliderGrp(fsg, edit=True, dragCommand=partial(setLineWidthCallback, fsg))
+        
+        
+def setLineWidthCallback(slider, *args):
+    value = mc.floatSliderGrp(slider, query=True, value=True)
+    for each in mc.ls('ml_arcTracer_brush_*', type='brush'):
+        mc.setAttr(each+'.globalScale', value)
+    
+    mc.optionVar(floatValue=('ml_arcTracer_brushGlobalScale', value))
+        
 
 def traceCamera(*args):
     '''
@@ -103,6 +118,14 @@ def traceWorld(*args):
     traceArc(space='world')
 
 
+def getWorldValueAtFrame(attr, frame):
+    mSelectionList = OpenMaya.MSelectionList()
+    mSelectionList.add(attr)
+    plug = OpenMaya.MPlug()
+    mSelectionList.getPlug(0, plug)
+    context = OpenMaya.MDGContext(OpenMaya.MTime(frame))
+    return plug.asDouble(context)
+
 def traceArc(space='camera'):
     '''
     The main function for creating the arc.
@@ -114,6 +137,10 @@ def traceArc(space='camera'):
     
     global ML_TRACE_ARC_PREVIOUS_SELECTION
     global ML_TRACE_ARC_PREVIOUS_SPACE
+    
+    globalScale = 1
+    if mc.optionVar(exists='ml_arcTracer_brushGlobalScale'):
+        globalScale = mc.optionVar(query='ml_arcTracer_brushGlobalScale')        
     
     #save for reset:
     origTime = mc.currentTime(query=True)
@@ -179,14 +206,14 @@ def traceArc(space='camera'):
         parentGrp = mc.ls(localGrp)[0]
     
     #group per object:
-    group = list()
-    points = list()
+    group = []
+    points = []
     
     for i,obj in enumerate(objs):
         sn = mc.ls(obj,shortNames=True)[0]
         name = sn.replace(':','_')
     
-        points.append(list())
+        points.append([])
         groupName = 'ml_%s_arcGrp' % name
         if mc.objExists(groupName):
             mc.delete(groupName)
@@ -199,14 +226,12 @@ def traceArc(space='camera'):
     
     with utl.UndoChunk():
     
-        #helper locator
-        loc = mc.spaceLocator()[0]
-        mc.parent(loc,parentGrp)
-        
         camSample = None
+        camROO = 0
         if space=='camera':
             camSample = mc.spaceLocator()[0]
-            mc.pointConstraint(cam, camSample)
+            mc.parentConstraint(cam, camSample)
+            camROO = mc.getAttr(cam+'.rotateOrder')
         
         for i,obj in enumerate(objs):
             sample = mc.spaceLocator()[0]
@@ -214,27 +239,19 @@ def traceArc(space='camera'):
 
             #frame loop:
             time = range(int(start),int(end+1))
+            
             for t in time:
-                objPnt = list()
+                objPnt = []
                 for attr in ('.tx','.ty','.tz'):
-                    mSelectionList = OpenMaya.MSelectionList()
-                    mSelectionList.add(sample+attr)
-                    plug = OpenMaya.MPlug()
-                    mSelectionList.getPlug(0, plug)
-                    context = OpenMaya.MDGContext(OpenMaya.MTime(t))
-                    objPnt.append(plug.asDouble(context))
+                    objPnt.append(getWorldValueAtFrame(sample+attr, t))
                 
                 if space=='camera':
-                    camPnt = list()
+                    camPnt = []
                     for attr in ('.tx','.ty','.tz'):
-                        mSelectionList = OpenMaya.MSelectionList()
-                        mSelectionList.add(camSample+attr)
-                        plug = OpenMaya.MPlug()
-                        mSelectionList.getPlug(0, plug)
-                        context = OpenMaya.MDGContext(OpenMaya.MTime(t))
-                        camPnt.append(plug.asDouble(context))
-                        
-                    #camPnt = mc.xform(cam, query=True, worldSpace=True, rotatePivot=True)
+                        camPnt.append(getWorldValueAtFrame(camSample+attr, t))
+                    camRot = []
+                    for attr in ('.rx','.ry','.rz'):
+                        camRot.append(getWorldValueAtFrame(camSample+attr, t))
 
                     objVec = utl.Vector(objPnt[0],objPnt[1],objPnt[2])
                     camVec = utl.Vector(camPnt[0],camPnt[1],camPnt[2])
@@ -243,22 +260,28 @@ def traceArc(space='camera'):
                     vec.normalize()
                     #multiply here to offset from camera
                     vec=vec*nearClipPlane*1.2
-                    vec+=camVec
-
-                    mc.xform(loc, worldSpace=True, translation=vec[:])
-
+                    
+                    oriLoc = mc.spaceLocator()[0]
+                    mc.setAttr(oriLoc+'.rotateOrder', camROO)
+                    mc.setAttr(oriLoc+'.rotate', *[math.degrees(x) for x in camRot])
+                    
+                    loc = mc.spaceLocator()[0]
+                    mc.setAttr(loc+'.translate', *vec[:])
+                    loc = mc.parent(loc, oriLoc)[0]
+                    
                     trans = mc.getAttr(loc+'.translate')
                     points[i].append(trans[0]) 
+                    
+                    mc.delete(oriLoc)
 
                 elif space=='world':
                     points[i].append(objPnt)
-                    
+            
             mc.delete(sample)
 
-        mc.delete(loc)
         if camSample:
             mc.delete(camSample)
-
+       
         #create the curves and do paint effects
         mc.ResetTemplateBrush()
         brush = mc.getDefaultBrush()
@@ -269,6 +292,8 @@ def traceArc(space='camera'):
         for i,obj in enumerate(objs):
 
             #setup brush for path
+            globalScale
+            mc.setAttr(brush+'.globalScale', globalScale)
             mc.setAttr(brush+'.screenspaceWidth',1)
             mc.setAttr(brush+'.distanceScaling',0)
             mc.setAttr(brush+'.brushWidth',0.003)
@@ -286,6 +311,8 @@ def traceArc(space='camera'):
             #paint fx
             mc.AttachBrushToCurves(curve)
             stroke = mc.ls(sl=True)[0]
+            mc.rename(mc.listConnections(stroke+'.brush', destination=False)[0], 'ml_arcTracer_brush_#')
+            
             stroke = mc.parent(stroke,group[i])[0]
 
             mc.setAttr(stroke+'.overrideEnabled',1)
@@ -320,7 +347,7 @@ def traceArc(space='camera'):
 
                 elif space=='world':
                     frameCurve = mc.circle(constructionHistory=False, radius=0.0001, sections=4)[0]
-                    mc.setAttr(frameCurve+'.translate', points[i][t][0], points[i][t][1] ,points[i][t][2])
+                    mc.setAttr(frameCurve+'.translate', points[i][t][0], points[i][t][1], points[i][t][2])
                     constraint = mc.tangentConstraint(curve, frameCurve, aimVector=(0,0,1), worldUpType='scene')
                     #mc.delete(constraint)
 
@@ -335,6 +362,7 @@ def traceArc(space='camera'):
 
                 stroke = mc.ls(sl=True)[0]
                 thisBrush = mc.listConnections(stroke+'.brush', destination=False)[0]
+                thisBrush = mc.rename(thisBrush, 'ml_arcTracer_brush_#')
 
                 #setup keyframes for frame highlighting
                 mc.setKeyframe(thisBrush, attribute='color1G', value=0, time=(start+t-1, start+t+1))
@@ -366,6 +394,7 @@ def traceArc(space='camera'):
             pass
     
     mc.select(objs,replace=True)
+    mc.refresh()
     
 
 
@@ -425,3 +454,5 @@ if __name__ == '__main__':ui()
 # Revision 4: 2014-03-01 : adding category
 #
 # Revision 5: 2016-12-10 : removing euclid dependency
+#
+# Revision 6: 2017-06-30 : Fixing bug with moving cameras, adding line width
