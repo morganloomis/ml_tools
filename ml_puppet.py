@@ -5,7 +5,7 @@
 #    / __ `__ \/ /  Licensed under Creative Commons BY-SA
 #   / / / / / / /  http://creativecommons.org/licenses/by-sa/3.0/
 #  /_/ /_/ /_/_/  _________                                   
-#               /_________/  Revision 21, 2017-06-29
+#               /_________/  Revision 23, 2017-07-07
 #      _______________________________
 # - -/__ Installing Python Scripts __/- - - - - - - - - - - - - - - - - - - - 
 # 
@@ -44,7 +44,7 @@
 __author__ = 'Morgan Loomis'
 __license__ = 'Creative Commons Attribution-ShareAlike'
 __category__ = 'animationScripts'
-__revision__ = 21
+__revision__ = 23
 
 import maya.cmds as mc
 import maya.mel as mm
@@ -53,7 +53,7 @@ import math, re, warnings
 
 try:
     import ml_utilities as utl
-    utl.upToDateCheck(30)
+    utl.upToDateCheck(31)
 except ImportError:
     result = mc.confirmDialog( title='Module Not Found', 
                 message='This tool requires the ml_utilities module. Once downloaded you will need to restart Maya.', 
@@ -125,10 +125,19 @@ def fkIkSwitchRangeSel(*args):
     fkIkSwitch(switchRange=True)
 
 
-def getPuppets(nodes=None):
-
-    if nodes:
-        return getNodeTypeAbove(nodes,'puppet')
+def getPuppets(node=None):
+    
+    if node:
+        puppets = []
+        if not isinstance(node, (list,tuple)):
+            node = [node]
+        for n in node:
+            if getNodeType(n) == 'puppet':
+                puppets.append(n)
+            else:
+                above = getNodeTypeAbove(n,'puppet')
+        if puppets:
+            return puppets
     return getNodesOfType('puppet')
 
 
@@ -324,7 +333,7 @@ def snap(node, snapTo):
     dup = mc.duplicate(node, parentOnly=True)[0]
     #unlock translates and rotates
     for a in ('.t','.r'):
-        for b in ('x','y','z'):
+        for b in 'xyz':
             mc.setAttr(dup+a+b, lock=False)
 
     mc.parentConstraint(snapTo, dup)
@@ -527,7 +536,6 @@ def fkIkSwitch(nodes=None, switchTo=None, switchRange=False, bakeOnOnes=False):
 
         else:
             #fk
-        
             #key ik controls to preserve position
             controls = list(data['ikControls'])
             controls.append(data['pvControl'])
@@ -708,24 +716,26 @@ def switchSpace(nodes=None, toSpace=None, switchRange=False, bakeOnOnes=False):
         else:
             print 'Space value not valid:',toSpace
             continue
+        currentValue = mc.getAttr(node+'.'+ssAttr)
+        
+        if currentValue == value:
+            print '{} space already set to {}, skipping'.format(node, toSpace)
+            continue
 
         locator = mc.spaceLocator(name='TEMP#')[0]
         snap(locator, node)
         
+        #need to test flipped before and after switch
+        preFlipped = hasFlippedParent(node)
+        
+        mc.setAttr(node+'.'+ssAttr, value)
+        postFlipped = hasFlippedParent(node)
+        
+        mc.setAttr(node+'.'+ssAttr, currentValue)
+        
         #flip locator if we're going to or from a mirrored space
-        if hasFlippedParent(node):
+        if preFlipped != postFlipped:
             mc.setAttr(locator+'.rotateX', mc.getAttr(locator+'.rotateX') + 180)
-     
-        parent = mc.listRelatives(node, parent=True)
-        if parent:
-            if mc.getAttr(parent[0]+'.scaleX') < 0:
-                mc.setAttr(locator+'.rotateX', mc.getAttr(locator+'.rotateX') + 180)
-            else:
-                currentValue = mc.getAttr(node+'.'+ssAttr)
-                mc.setAttr(node+'.'+ssAttr, value)
-                if mc.getAttr(parent[0]+'.scaleX') < 0:
-                    mc.setAttr(locator+'.rotateX', mc.getAttr(locator+'.rotateX') + 180)
-                mc.setAttr(node+'.'+ssAttr, currentValue)
 
         controls.append(node)
         attributes.append(ssAttr)
@@ -917,7 +927,9 @@ def puppetContextMenu(parent, node):
     elements = getElementsAbove(nodes)
     if elements:
         element = elements[0]
-        puppet = getPuppets(element)
+        puppets = getPuppets(element)
+        if puppets:
+            puppet = puppets[0]
 
     #create menu
     mc.setParent(parent, menu=True)
@@ -960,7 +972,7 @@ def puppetContextMenu(parent, node):
             mc.setParent('..', menu=True)
         
     #selection
-    if element:
+    if element or puppet:
 
         mc.menuItem(label='Selection', subMenu=True)
 
@@ -1146,12 +1158,7 @@ def getMirrorAxis(node):
     axis = []
     if mc.attributeQuery('mirrorAxis', exists=True, node=node):        
         mirrorAxis = mc.getAttr('{}.mirrorAxis'.format(node))
-        if mirrorAxis:
-            #if parent is scaled negative X, don't flip any axis
-            parent = mc.listRelatives(node, parent=True)
-            if parent and mc.getAttr(parent[0]+'.scaleX') < 0:
-                return []
-
+        if mirrorAxis and not hasFlippedParent(node):
             axis = mirrorAxis.split(',')
     return axis
 
@@ -1365,3 +1372,7 @@ def flipAnimation(nodes, *args):
 # Revision 20: 2017-06-13 : space switch matching bug fix
 #
 # Revision 21: 2017-06-29 : full context menu for puppet node
+#
+# Revision 22: 2017-06-30 : proper testing for puppet
+#
+# Revision 23: 2017-07-07 : space switch and mirroring bugs
