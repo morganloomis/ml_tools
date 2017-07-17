@@ -5,7 +5,7 @@
 #    / __ `__ \/ /  Licensed under Creative Commons BY-SA
 #   / / / / / / /  http://creativecommons.org/licenses/by-sa/3.0/
 #  /_/ /_/ /_/_/  _________                                   
-#               /_________/  Revision 2, 2017-06-26
+#               /_________/  Revision 3, 2017-07-17
 #      _______________________________
 # - -/__ Installing Python Scripts __/- - - - - - - - - - - - - - - - - - - - 
 # 
@@ -45,7 +45,7 @@
 __author__ = 'Morgan Loomis'
 __license__ = 'Creative Commons Attribution-ShareAlike'
 __category__ = 'animationScripts'
-__revision__ = 2
+__revision__ = 3
 
 try:
     from PySide2 import QtGui, QtCore
@@ -60,7 +60,7 @@ import maya.cmds as mc
 
 try:
     import ml_utilities as utl
-    utl.upToDateCheck(30)
+    utl.upToDateCheck(31)
 except ImportError:
     result = mc.confirmDialog( title='Module Not Found', 
                 message='This tool requires the ml_utilities module. Once downloaded you will need to restart Maya.', 
@@ -123,8 +123,7 @@ class EditPivotContext(object):
         self.scriptJob = None
         self.keypressFilter = PivotKeypressFilter(self.bakePivot, self.cleanup)
         
-    
-    
+        
     def editPivot(self, *args):
         sel = mc.ls(sl=True)
         
@@ -140,13 +139,84 @@ class EditPivotContext(object):
             #we have a pivot handle selected
             return
         
+        self.node = sel[0]
+
         if is_pivot_connected(sel[0]):
+            driverAttr = pivot_driver_attr(sel[0])
+            if driverAttr:
+                self.editPivotDriver(driverAttr)
+            else:
+                om.MGlobal.displayWarning('Pivot attribute is connected, unable to edit.') 
             return
         
-        self.node = sel[0]
+        self.editPivotHandle()
+    
+    
+    def editPivotDriver(self, driver):
+        
+        self.pivotDriver = driver
+        
+        #get driver range
+        node,attr = driver.split('.',1)
+        value = mc.getAttr(driver)
+        
+        minValue = mc.attributeQuery(attr, node=node, minimum=True)[0]
+        maxValue = mc.attributeQuery(attr, node=node, maximum=True)[0]
+        
+        #create a ui with a slider
+        self.pivotDriverWindow = 'ml_pivot_editPivotDriverUI'
+
+        if mc.window(self.pivotDriverWindow, exists=True):
+            mc.deleteUI(self.pivotDriverWindow)
+        window = mc.window(self.pivotDriverWindow, width=1, height=1)
+        mc.columnLayout()
+        self.floatSlider = mc.floatSliderButtonGrp(label=attr, 
+                                                   field=True, 
+                                                   value=value, 
+                                                   buttonLabel='Bake', 
+                                                   minValue=minValue, 
+                                                   maxValue=maxValue, 
+                                                   buttonCommand=self.doEditPivotDriver )
+        mc.showWindow( window )
+        mc.window(self.pivotDriverWindow, edit=True, width=1, height=1)
+        
+    def doEditPivotDriver(self, *args):
+        
+        newValue = mc.floatSliderButtonGrp(self.floatSlider, query=True, value=True)
+        try:
+            mc.deleteUI(self.pivotDriverWindow)
+        except:
+            pass
+        
+        currentValue = mc.getAttr(self.pivotDriver)
+        if newValue == currentValue:
+            return
+        
+        oldRP = mc.getAttr(self.node+'.rotatePivot')[0]
+        mc.setAttr(self.pivotDriver, newValue)
+        newRP = mc.getAttr(self.node+'.rotatePivot')[0]
+        mc.setAttr(self.pivotDriver, currentValue)
+        
+        parentPosition = mc.group(em=True)
+        offsetPosition = mc.group(em=True)
+        offsetPosition = mc.parent(offsetPosition, parentPosition)[0]
+        mc.setAttr(offsetPosition+'.translate', newRP[0]-oldRP[0], newRP[1]-oldRP[1], newRP[2]-oldRP[2])
+        
+        mc.delete(mc.parentConstraint(self.node, parentPosition))
+    
+        utl.matchBake(source=[self.node], destination=[parentPosition], bakeOnOnes=True, maintainOffset=False, preserveTangentWeight=False)
+        
+        mc.cutKey(self.pivotDriver)
+        mc.setAttr(self.pivotDriver, newValue)
+        mc.refresh()
+        utl.matchBake(source=[offsetPosition], destination=[self.node], bakeOnOnes=True, maintainOffset=False, preserveTangentWeight=False, rotate=False)
+    
+        mc.delete(parentPosition)
+        
+        
+    def editPivotHandle(self):
         
         qt_maya_window.installEventFilter(self.keypressFilter)        
-        
         
         #create transform
         self.pivotHandle = mc.group(em=True, name='Adjust_Pivot')
@@ -236,11 +306,29 @@ class EditPivotContext(object):
                 mc.lockNode(each, lock=False)
                 mc.delete(each)
 
+def pivot_driver_attr(node):
+    '''
+    Start with supporting pivots driven by remap value nodes, more support in the future as requested.
+    '''
+    #rpSrc = mc.listConnections(node+'.rotatePivot', source=True, destination=False, plugs=True)
+    #if rpSrc and rpSrc[0].endswith('.translate') and mc.getAttr(rpSrc[0], keyable=True):
+        #return rpSrc[0]
+    
+    for each in ('rotatePivotX', 'rotatePivotY', 'rotatePivotZ'):
+        src = mc.listConnections(node+'.'+each, source=True, destination=False)
+        if not src:
+            continue
+        srcType = mc.nodeType(src[0])
+        if srcType == 'remapValue':
+            src = mc.listConnections(src[0]+'.inputValue', source=True, destination=False, plugs=True)
+            if src and mc.getAttr(src[0], keyable=True) and not mc.getAttr(src[0], lock=True):
+                return src[0]
+    return None
+            
 
 def is_pivot_connected(node):
     for each in ('rotatePivot', 'rotatePivotX', 'rotatePivotY', 'rotatePivotZ'):
         if mc.listConnections(node+'.'+each, source=True, destination=False):
-            om.MGlobal.displayWarning('Pivot attribute is connected, unable to edit.')
             return True
     return False
 
@@ -256,24 +344,49 @@ def reset_pivot(*args):
         om.MGlobal.displayWarning('Only works on one node at a time.')
         return
 
-    if is_pivot_connected(sel[0]):
-        return    
-
     node = sel[0]
+    driver = None
+    driver_value = None
+    driver_default = None
 
-    pivotPosition = mc.getAttr(node+'.rotatePivot')[0]
-    if pivotPosition  == (0.0,0.0,0.0):
-        return
-
+    if is_pivot_connected(node):
+        driver = pivot_driver_attr(node)
+        if driver:
+            dNode,dAttr = driver.split('.',1)
+            driver_value = mc.getAttr(driver)
+            driver_default = mc.attributeQuery(dAttr, node=dNode, listDefault=True)[0]
+            if driver_default == driver_value:
+                return
+        else:
+            om.MGlobal.displayWarning('Pivot attribute is connected, unable to edit.')        
+            return
+    
+    if not driver:
+        pivotPosition = mc.getAttr(node+'.rotatePivot')[0]
+        if pivotPosition  == (0.0,0.0,0.0):
+            return
+    
     tempPosition = mc.group(em=True)
     tempPivot = mc.group(em=True)
     tempPivot = mc.parent(tempPivot, node)[0]
-    mc.setAttr(tempPivot+'.translate', 0,0,0)
+    if driver:
+        mc.setAttr(driver, driver_default)
+        newRP = mc.getAttr(node+'.rotatePivot')[0]
+        mc.setAttr(driver, driver_value)
+        mc.setAttr(tempPivot+'.translate', *newRP)
+    else:
+        mc.setAttr(tempPivot+'.translate', 0,0,0)
+        
     mc.setAttr(tempPivot+'.rotate', 0,0,0)
 
     utl.matchBake(source=[tempPivot], destination=[tempPosition], bakeOnOnes=True, maintainOffset=False, preserveTangentWeight=False, rotate=False)
-
-    mc.setAttr(node+'.rotatePivot', 0,0,0)
+    
+    if driver:
+        mc.setAttr(driver, driver_default)
+    else:
+        mc.setAttr(node+'.rotatePivot', 0,0,0)
+    
+    mc.refresh()
     utl.matchBake(source=[tempPosition], destination=[node], bakeOnOnes=True, maintainOffset=False, preserveTangentWeight=False, rotate=False)
 
     mc.delete(tempPosition,tempPivot)    
@@ -290,3 +403,5 @@ if __name__ == '__main__':
 # Revision 1: 2016-06-21 : First publish.
 #
 # Revision 2: 2017-06-26 : update for pySide2, maya 2017
+#
+# Revision 3: 2017-07-17 : initial support for attribute driven pivots
