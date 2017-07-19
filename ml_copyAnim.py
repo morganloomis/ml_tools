@@ -5,7 +5,7 @@
 #    / __ `__ \/ /  Licensed under Creative Commons BY-SA
 #   / / / / / / /  http://creativecommons.org/licenses/by-sa/3.0/
 #  /_/ /_/ /_/_/  _________                                   
-#               /_________/  Revision 4, 2014-03-01
+#               /_________/  Revision 5, 2017-07-19
 #      _______________________________
 # - -/__ Installing Python Scripts __/- - - - - - - - - - - - - - - - - - - - 
 # 
@@ -46,7 +46,7 @@
 __author__ = 'Morgan Loomis'
 __license__ = 'Creative Commons Attribution-ShareAlike'
 __category__ = 'animationScripts'
-__revision__ = 4
+__revision__ = 5
 
 import maya.cmds as mc
 import maya.mel as mm
@@ -54,7 +54,7 @@ from maya import OpenMaya
 
 try:
     import ml_utilities as utl
-    utl.upToDateCheck(9)
+    utl.upToDateCheck(31)
 except ImportError:
     result = mc.confirmDialog( title='Module Not Found', 
                 message='This tool requires the ml_utilities module. Once downloaded you will need to restart Maya.', 
@@ -80,6 +80,9 @@ Highlight the timeline to copy just that part of the animation.''') as win:
 
 
 def _getStartAndEnd():
+    '''
+    Only return start and end if frame range is highlighted. Otherwise use all available animation.
+    '''
     
     gPlayBackSlider = mm.eval('$temp=$gPlayBackSlider')
     if mc.timeControl(gPlayBackSlider, query=True, rangeVisible=True):
@@ -88,16 +91,15 @@ def _getStartAndEnd():
     return None, None
 
 
-def copySingle(source=None, destination=None, pasteMethod='replace', offset=0, addToLayer=False):
+def copySingle(source=None, destination=None, pasteMethod='replace', offset=0, addToLayer=False, rotateOrder=True):
     '''
     Copy animation from a source node and paste it to a destination node
     '''
     
     start, end = _getStartAndEnd()
-     
+    
     if not source and not destination:
         sel = mc.ls(sl=True)
-        
         if len(sel) != 2:
             OpenMaya.MGlobal.displayWarning('Please select exactly 2 objects.')
             return
@@ -108,14 +110,14 @@ def copySingle(source=None, destination=None, pasteMethod='replace', offset=0, a
     layer = None
     if addToLayer:
         layer = utl.createAnimLayer(destination, namePrefix='ml_cp')
-        
-    copyAnimation(source=source, destination=destination, pasteMethod=pasteMethod, offset=offset, start=start, end=end, layer=layer)
     
-#     if sel:
-#         mc.select(sel)
+    copyAnimation(source=source, destination=destination, pasteMethod=pasteMethod, offset=offset, start=start, end=end, layer=layer, rotateOrder=rotateOrder)
+    
+    #if sel:
+        #mc.select(sel)
 
 
-def copyHierarchy(sourceTop=None, destinationTop=None, pasteMethod='replace', offset=0, addToLayer=False, layerName=None):
+def copyHierarchy(sourceTop=None, destinationTop=None, pasteMethod='replace', offset=0, addToLayer=False, layerName=None, rotateOrder=True):
     '''
     Copy animation from a source hierarchy and paste it to a destination hierarchy.
     '''
@@ -127,16 +129,14 @@ def copyHierarchy(sourceTop=None, destinationTop=None, pasteMethod='replace', of
         if len(sel) != 2:
             OpenMaya.MGlobal.displayWarning('Please select exactly 2 objects.')
             return
-            
+        
         sourceTop = sel[0]
         destinationTop = sel[1]
     
     #get keyed objects below source
-    nodes = mc.listRelatives(sourceTop, pa=True, ad=True)
-    if not nodes:
-        nodes = list()
+    nodes = mc.listRelatives(sourceTop, pa=True, ad=True) or []
     nodes.append(sourceTop)
-    keyed = list()
+    keyed = []
     
     for node in nodes:
         # this will only return time based keyframes, not driven keys
@@ -147,42 +147,45 @@ def copyHierarchy(sourceTop=None, destinationTop=None, pasteMethod='replace', of
         return
     
     #get a list of all nodes under the destination
-    destNodes = mc.listRelatives(destinationTop, ad=True)
-    if not destNodes:
-        destNodes = list()
-    destNodes.append(destinationTop)
+    allDestNodes = mc.listRelatives(destinationTop, ad=True, pa=True) or []
+    allDestNodes.append(destinationTop)
     
-    destNS = utl.getNamespace(destinationTop)
-    destNames = [x.rpartition(':')[-1] for x in destNodes]
+    destNodeMap = {}
+    duplicate = []
+    for each in allDestNodes:
+        name = each.rsplit('|')[-1].rsplit(':')[-1]
+        if name in duplicate:
+            continue
+        if name in destNodeMap.keys():
+            duplicate.append(name)
+            continue
+        destNodeMap[name] = each
+    
+    destNS = utl.getNamespace(destinationTop) 
     
     layer = None
     if addToLayer:
         if not layerName:
             layerName = 'copyHierarchy'
         layer = utl.createAnimLayer(name=layerName)
-        
+    
     for node in keyed:
-        nodeName = mc.ls(node, shortNames=True)[0]
+        #strip name
+        nodeName = node.rsplit('|')[-1].rsplit(':')[-1]
         
-        #strip namespace
-        if ':' in nodeName:
-            nodeName = nodeName.rpartition(':')[-1]
-        
-        if nodeName in destNames:
-            destNode = mc.ls(destNS+nodeName)
-            if not destNode:
-                print 'Cannot find destination node: '+destNS+':'+nodeName
-                continue
-            if len(destNode) > 1:
-                print 'Two or more destination nodes have the same name: '+destNS+':'+nodeName
-                continue
+        if nodeName in duplicate:
+            print 'Two or more destination nodes have the same name: '+destNS+nodeName
+            continue
+        if nodeName not in destNodeMap.keys():
+            print 'Cannot find destination node: '+destNS+nodeName
+            continue
             
-            copyAnimation(source=node, destination=destNode[0], pasteMethod=pasteMethod, offset=offset, start=start, end=end, layer=layer)
+        copyAnimation(source=node, destination=destNodeMap[nodeName], pasteMethod=pasteMethod, offset=offset, start=start, end=end, layer=layer, rotateOrder=rotateOrder)
     
 #     if sel:
 #         mc.select(sel)
 
-def copyAnimation(source=None, destination=None, pasteMethod='replace', offset=0, start=None, end=None, layer=None):
+def copyAnimation(source=None, destination=None, pasteMethod='replace', offset=0, start=None, end=None, layer=None, rotateOrder=True):
     '''
     Actually do the copy and paste from one node to another. If start and end frame is specified,
     set a temporary key before copying, and delete it afterward.
@@ -196,6 +199,12 @@ def copyAnimation(source=None, destination=None, pasteMethod='replace', offset=0
         utl.minimizeRotationCurves(source)
         utl.minimizeRotationCurves(destination)
     
+    if rotateOrder:
+        try:
+            if mc.getAttr(destination+'.rotateOrder', keyable=True):
+                mc.setAttr(destination+'.rotateOrder', mc.getAttr(source+'.rotateOrder'))
+        except:pass
+        
     if pasteMethod=='replaceCompletely' or not start or not end:
         mc.copyKey(source)
         if layer:
@@ -209,8 +218,8 @@ def copyAnimation(source=None, destination=None, pasteMethod='replace', offset=0
             return
         
         #story cut keytimes as 2 separate lists means we only have to run 2 cutkey commands, rather than looping through each
-        cutStart = list()
-        cutEnd = list()
+        cutStart = []
+        cutEnd = []
         for curve in animCurves:
         
             #does it have keyframes on the start and end frames?
@@ -225,7 +234,7 @@ def copyAnimation(source=None, destination=None, pasteMethod='replace', offset=0
             if not endKey: 
                 mc.setKeyframe(curve, time=(end,), insert=True)
                 cutEnd.append(curve)
-            
+        
         mc.copyKey(source, time=(start,end))
         if layer:
             for each in mc.ls(type='animLayer'):
@@ -253,3 +262,5 @@ if __name__ == '__main__': ui()
 # Revision 3: 2012-11-28 : remove debug print
 #
 # Revision 4: 2014-03-01 : Adding category and fixing bad argument name.
+#
+# Revision 5: 2017-07-19 : support for non-namespaced hierarchies, transferring rotateOrder
