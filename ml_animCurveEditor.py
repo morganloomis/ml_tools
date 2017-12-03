@@ -5,7 +5,7 @@
 #    / __ `__ \/ /  Licensed under Creative Commons BY-SA
 #   / / / / / / /  http://creativecommons.org/licenses/by-sa/3.0/
 #  /_/ /_/ /_/_/  _________                                   
-#               /_________/  Revision 2, 2016-05-01
+#               /_________/  Revision 3, 2017-12-03
 #      _______________________________
 # - -/__ Installing Python Scripts __/- - - - - - - - - - - - - - - - - - - - 
 # 
@@ -45,7 +45,7 @@
 __author__ = 'Morgan Loomis'
 __license__ = 'Creative Commons Attribution-ShareAlike'
 __category__ = 'animationScripts'
-__revision__ = 2
+__revision__ = 3
 
 
 import maya.cmds as mc
@@ -55,7 +55,7 @@ import itertools
 
 try:
     import ml_utilities as utl
-    utl.upToDateCheck(17)
+    utl.upToDateCheck(31)
 except ImportError:
     result = mc.confirmDialog( title='Module Not Found', 
                 message='This tool requires the ml_utilities module. Once downloaded you will need to restart Maya.', 
@@ -112,6 +112,11 @@ change tabs to choose options related to that function.''') as win:
                                            'selectionOption':'ml_animCurveEditor_selection_menu'},
                             annotation='Offset curves so that the current time is moved to the specified frame.')
         mc.setParent('..')
+        
+        win.ButtonWithPopup(label='Insert Frame', command=insertFrame,  name='ml_animCurveEditor',
+                                readUI_toArgs={'selectionOption':'ml_animCurveEditor_selection_menu'},
+                                annotation='Insert frame.'
+                                )        
         mc.setParent('..')
         
         
@@ -427,6 +432,14 @@ def rippleCut(selectionOption=1, setKey=True):
     keySel.keyframe(edit=True, time=(str(end)+':',), relative=True, timeChange=start-end)
     
     
+def insertFrame(selectionOption=1):
+    
+    keySel = _getKeySelection(selectionOption)
+    
+    #move everything after the current frame
+    keySel.keyframe(edit=True, time=(str(mc.currentTime(query=True))+':',), relative=True, timeChange=1)
+    
+    
 def clampValues(value=0, selectionOption=1, clampOption=0):
     keySel = _getKeySelection(selectionOption)
     
@@ -487,3 +500,5 @@ if __name__ == '__main__': ui()
 # Revision 1: 2016-02-29 : First publish.
 #
 # Revision 2: 2016-05-01 : Fixing command name typo.
+#
+# Revision 3: 2017-12-03 : Adding "Insert Frame"
