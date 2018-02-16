@@ -1,58 +1,89 @@
-# 
-#   -= ml_toolbox.py =-
+# -= ml_toolbox.py =-
 #                __   by Morgan Loomis
 #     ____ ___  / /  http://morganloomis.com
-#    / __ `__ \/ /  Licensed under Creative Commons BY-SA
-#   / / / / / / /  http://creativecommons.org/licenses/by-sa/3.0/
-#  /_/ /_/ /_/_/  _________                                   
-#               /_________/  Revision 5, 2016-12-10
-#      _______________________________
-# - -/__ Installing Python Scripts __/- - - - - - - - - - - - - - - - - - - - 
+#    / __ `__ \/ /  Revision 6
+#   / / / / / / /  2018-02-17
+#  /_/ /_/ /_/_/  _________
+#               /_________/
+# 
+#     ______________
+# - -/__ License __/- - - - - - - - - - - - - - - - - - - - - - - - - - - - - 
+# 
+# Copyright 2018 Morgan Loomis
+# 
+# Permission is hereby granted, free of charge, to any person obtaining a copy of 
+# this software and associated documentation files (the "Software"), to deal in 
+# the Software without restriction, including without limitation the rights to use, 
+# copy, modify, merge, publish, distribute, sublicense, and/or sell copies of the 
+# Software, and to permit persons to whom the Software is furnished to do so, 
+# subject to the following conditions:
+# 
+# The above copyright notice and this permission notice shall be included in all 
+# copies or substantial portions of the Software.
+# 
+# THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR 
+# IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY, FITNESS 
+# FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR 
+# COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER 
+# IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN 
+# CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
+# 
+#     ___________________
+# - -/__ Installation __/- - - - - - - - - - - - - - - - - - - - - - - - - - 
 # 
 # Copy this file into your maya scripts directory, for example:
 #     C:/Documents and Settings/user/My Documents/maya/scripts/ml_toolbox.py
 # 
-# Run the tool by importing the module, and then calling the primary function.
-# From python, this looks like:
+# Run the tool in a python shell or shelf button by importing the module, 
+# and then calling the primary function:
+# 
 #     import ml_toolbox
 #     ml_toolbox.main()
-# From MEL, this looks like:
-#     python("import ml_toolbox;ml_toolbox.main()");
-#      _________________
+# 
+# 
+#     __________________
 # - -/__ Description __/- - - - - - - - - - - - - - - - - - - - - - - - - - - 
 # 
-# Create custom menus in Maya's main menu bar for organizing scripts, just by putting them into directories.
-# Insert tools into the existing maya menus, or add entirely new menus.
-#      ___________
+# Create custom menus in Maya's main menu bar for organizing scripts, just by
+# putting them into directories. Insert tools into the existing maya menus, or add
+# entirely new menus.
+# 
+#     ____________
 # - -/__ Usage __/- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - 
 # 
-# Make sure the ml_toolbox_menu folder is in your scripts directory or some other python path.
-# Run the command mentioned above, or for best results, add the command to your scripts/userSetup.mel file, like so:
-#     python('import ml_toolbox;ml_toolbox.main()');
+# Make sure the ml_toolbox_menu folder is in your scripts directory or some other
+# python path. Run the command mentioned above, or for best results, add the
+# command to your scripts/userSetup.mel file, like so:   python('import
+# ml_toolbox;ml_toolbox.main()'); To add a script to the menu, create folders and
+# sub-folders in the ml_toolbox_menu directory. If you add a folder that is named
+# the same as a maya menu, the tools in that folder will be added to the maya
+# menu, rather than a new menu. For MEL scripts to work, the main global proc
+# needs to be the same name as the file. For python scripts, the main function
+# needs to be "main" or "ui"
 # 
-# To add a script to the menu, create folders and sub-folders in the ml_toolbox_menu directory. 
-# If you add a folder that is named the same as a maya menu, the tools in that folder
-# will be added to the maya menu, rather than a new menu.
-# For MEL scripts to work, the main global proc needs to be the same name as the file.
-# For python scripts, the main function needs to be "main" or "ui"
-#      ______________
+#     _______________
 # - -/__ Advanced __/- - - - - - - - - - - - - - - - - - - - - - - - - - - - 
 # 
-# If you have large menus and you don't like all the printing (if it's slowing startup), you can
-# remove the verbose flag from Toolbox call in the main() function to suppress it.
-# For python scripts, there's a few extra things you can do to get the most out of this tool.
-# If you want any additional functions to be searched for besides main() etc, add them to the functionList
-# variable below. They are sorted in search order.
-# You can add an optional insertAfter variable to a script to have its menu item inserted after 
-# an existing menuItem in a maya menu. See the bundled scripts for examples of this.
-# If you'd like to automatically set up a hotkey for a tool, add a hotkey variable to script file
-# with the value set to the modifier+hotkey button. (See the bundled create/snapLocator for an example of this.)
+# If you have large menus and you don't like all the printing (if it's slowing
+# startup), you can remove the verbose flag from Toolbox call in the main()
+# function to suppress it. For python scripts, there's a few extra things you can
+# do to get the most out of this tool. If you want any additional functions to be
+# searched for besides main() etc, add them to the functionList variable below.
+# They are sorted in search order. You can add an optional insertAfter variable to
+# a script to have its menu item inserted after an existing menuItem in a maya
+# menu. See the bundled scripts for examples of this. If you'd like to
+# automatically set up a hotkey for a tool, add a hotkey variable to script file
+# with the value set to the modifier+hotkey button. (See the bundled
+# create/snapLocator for an example of this.)
+# 
+# 
 #                                                             __________
 # - - - - - - - - - - - - - - - - - - - - - - - - - - - - - /_ Enjoy! _/- - -
+
 __author__ = 'Morgan Loomis'
-__license__ = 'Creative Commons Attribution-ShareAlike'
-__category__ = 'animationScripts'
-__revision__ = 5
+__license__ = 'MIT'
+__category__ = 'None'
+__revision__ = 6
 
 import maya.cmds as mc
 import maya.mel as mm
@@ -108,7 +139,7 @@ class Toolbox(object):
     def __init__(self, rootModule, verbose=False):
 
         self.menusPath = rootModule.__path__[0].replace('\\','/')
-        
+
         self.tools = list()
         self.hasHotkeys = list()
         self.mayaMenus = list()
@@ -117,9 +148,9 @@ class Toolbox(object):
 
         self.createMainMenus()
 
-    
+
     def createMainMenus(self):
-        
+
         #mayas main window menu:
         gMainWindow = mm.eval('$temp=$gMainWindow')
         #get all the menus that are children of the main menu
@@ -135,7 +166,7 @@ class Toolbox(object):
 
         mayaMenuDirectories = list()
         customMenuDirectories = list()
-        
+
         for folder in os.listdir(self.menusPath):
             if folder.startswith('.'):
                 continue
@@ -223,13 +254,13 @@ class Toolbox(object):
             subItems = os.listdir(path)
             #if there's stuff in the folder, create a menu item
             if subItems:
-                
+
                 #if there are python files in this directory, but no __init__ file, create one.
                 if not '__init__.py' in subItems and [x for x in subItems if x.endswith('.py')]:
                     print 'Creating required __init__.py file in {}'.format(path)
                     with open(os.path.join(path,'__init__.py'), 'w') as f:
                         f.write('#Generated by ml_toolbox')
-                    
+
                 subItems = sorted(subItems)
 
                 #do directories first, then files
@@ -240,7 +271,7 @@ class Toolbox(object):
                 menuName = os.path.basename(path)
                 menuName = menuPrefix+menuName
                 if mc.menu(menuName, exists=True):
-                    mc.deleteUI(menuName)        
+                    mc.deleteUI(menuName)
 
                 #generate menu label
                 label = labelFromPath(path)
@@ -267,7 +298,7 @@ class Toolbox(object):
                 #now go through the files
                 for each in filePaths:
                     if not each.endswith('__init__.py') and ((each.endswith('.py') or each.endswith('.mel'))):
-                        tool = Tool(each, depth=depth) 
+                        tool = Tool(each, depth=depth)
                         self.classifyTool(tool)
                         if not tool.errors:
                             if self.verbose:
@@ -285,15 +316,15 @@ class Toolbox(object):
         '''
         if not self.hasHotkeys:
             return
-        
+
         commands = list()
         keys = list()
-        
+
         doPrint = True
         for each in self.hasHotkeys:
             if each.hotkey:
                 if doPrint and self.verbose:
-                    print 
+                    print
                     print 'Set Hotkeys'
                     doPrint = False
                 each.hotkey.create(self.verbose)
@@ -349,7 +380,7 @@ class Tool(object):
         noExt = fromRoot.split('.')[0]
         dotPath = noExt.replace('/','.')
         self.moduleName = ROOT_MODULE+dotPath
-        
+
         #try to import the module, catch ones with errors
         try:
             __import__(self.moduleName)
@@ -396,7 +427,7 @@ class Tool(object):
                 if self.hotkey.keys[0].isupper():
                     kwargs['shiftModifier'] = True
                 kwargs['keyEquivalent'] = self.hotkey.keys[0]
-        
+
         if self.verbose:
             print self.depth*'\t'+label
 
@@ -411,7 +442,7 @@ class Tool(object):
                 for each in menuItemArray:
                     eachLabel = mc.menuItem(each, query=True, label=True)
                     menuItems[eachLabel] = each
-    
+
                 if self.module.insertAfter in menuItems:
                     kwargs['insertAfter'] = menuItems[self.module.insertAfter]
 
@@ -479,7 +510,7 @@ class Tool(object):
             for i,k in enumerate(self.keys):
 
                 name = self.name+'.'+self.functions[i]
-                
+
                 if verbose:
                     hotkeyPrint = '\t'
                     if self.altModifier[i]:
@@ -516,3 +547,5 @@ if __name__ == '__main__':
 # Revision 4: 2016-03-23 : Fixing slash bug in some windows cases.
 #
 # Revision 5: 2016-12-10 : Fixing print, and auto creation of __init__ files on windows.
+#
+# Revision 6: 2018-02-17 : Updating license to MIT.

@@ -1,38 +1,64 @@
-# 
-#   -= ml_lockAndHideAttributes.py =-
+# -= ml_lockAndHideAttributes.py =-
 #                __   by Morgan Loomis
 #     ____ ___  / /  http://morganloomis.com
-#    / __ `__ \/ /  Licensed under Creative Commons BY-SA
-#   / / / / / / /  http://creativecommons.org/licenses/by-sa/3.0/
-#  /_/ /_/ /_/_/  _________                                   
-#               /_________/  Revision 2, 2014-03-01
-#      _______________________________
-# - -/__ Installing Python Scripts __/- - - - - - - - - - - - - - - - - - - - 
+#    / __ `__ \/ /  Revision 3
+#   / / / / / / /  2018-02-17
+#  /_/ /_/ /_/_/  _________
+#               /_________/
+# 
+#     ______________
+# - -/__ License __/- - - - - - - - - - - - - - - - - - - - - - - - - - - - - 
+# 
+# Copyright 2018 Morgan Loomis
+# 
+# Permission is hereby granted, free of charge, to any person obtaining a copy of 
+# this software and associated documentation files (the "Software"), to deal in 
+# the Software without restriction, including without limitation the rights to use, 
+# copy, modify, merge, publish, distribute, sublicense, and/or sell copies of the 
+# Software, and to permit persons to whom the Software is furnished to do so, 
+# subject to the following conditions:
+# 
+# The above copyright notice and this permission notice shall be included in all 
+# copies or substantial portions of the Software.
+# 
+# THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR 
+# IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY, FITNESS 
+# FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR 
+# COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER 
+# IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN 
+# CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
+# 
+#     ___________________
+# - -/__ Installation __/- - - - - - - - - - - - - - - - - - - - - - - - - - 
 # 
 # Copy this file into your maya scripts directory, for example:
 #     C:/Documents and Settings/user/My Documents/maya/scripts/ml_lockAndHideAttributes.py
 # 
-# Run the tool by importing the module, and then calling the primary function.
-# From python, this looks like:
+# Run the tool in a python shell or shelf button by importing the module, 
+# and then calling the primary function:
+# 
 #     import ml_lockAndHideAttributes
 #     ml_lockAndHideAttributes.ui()
-# From MEL, this looks like:
-#     python("import ml_lockAndHideAttributes;ml_lockAndHideAttributes.ui()");
-#      _________________
+# 
+# 
+#     __________________
 # - -/__ Description __/- - - - - - - - - - - - - - - - - - - - - - - - - - - 
 # 
-# Quickly set the locked and keyable state of attributes in the channel box. This tool
-# is designed to be used as hotkeys for quickly locking and hiding attributes. It will operate
-# on all visible attributes, unless specific channels are selected. When using to unhide attributes,
-# it will unhide all standard transform attributes, and all user defined attributes.
-#      ___________
+# Quickly set the locked and keyable state of attributes in the channel box. This
+# tool is designed to be used as hotkeys for quickly locking and hiding
+# attributes. It will operate on all visible attributes, unless specific channels
+# are selected. When using to unhide attributes, it will unhide all standard
+# transform attributes, and all user defined attributes.
+# 
+#     ____________
 # - -/__ Usage __/- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - 
 # 
-# Run the UI, select channels in the channel box, and hit the appropriate button to
-# lock, hide, unlock or unhide channels. Right click the buttons to create hotkeys
-# or shelf buttons.
-#      ________________
-# - -/__ UI Options __/- - - - - - - - - - - - - - - - - - - - - - - - - - - 
+# Run the UI, select channels in the channel box, and hit the appropriate button
+# to lock, hide, unlock or unhide channels. Right click the buttons to create
+# hotkeys or shelf buttons.
+# 
+#     _________
+# - -/__ Ui __/- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - 
 # 
 # [Lock] : Lock selected attributes.
 # [Hide] : Hide selected attributes.
@@ -40,17 +66,20 @@
 # [Unlock] : Unlock selected attributes.
 # [Unhide] : Unhide all core attributes.
 # [Unlock and Unhide] : Unlock and unhide selected attributes.
-#      __________________
+# 
+#     ___________________
 # - -/__ Requirements __/- - - - - - - - - - - - - - - - - - - - - - - - - - 
 # 
 # This script requires the ml_utilities module, which can be downloaded here:
-# 	http://morganloomis.com/wiki/tools.html#ml_utilities
+#     https://raw.githubusercontent.com/morganloomis/ml_tools/master/ml_utilities.py
+# 
 #                                                             __________
 # - - - - - - - - - - - - - - - - - - - - - - - - - - - - - /_ Enjoy! _/- - -
+
 __author__ = 'Morgan Loomis'
-__license__ = 'Creative Commons Attribution-ShareAlike'
-__category__ = 'riggingScripts'
-__revision__ = 2
+__license__ = 'MIT'
+__category__ = 'None'
+__revision__ = 3
 
 import maya.cmds as mc
 import maya.mel as mm
@@ -58,7 +87,7 @@ from maya import OpenMaya
 
 try:
     import ml_utilities as utl
-    utl.upToDateCheck(9)
+    utl.upToDateCheck(32)
 except ImportError:
     result = mc.confirmDialog( title='Module Not Found', 
                 message='This tool requires the ml_utilities module. Once downloaded you will need to restart Maya.', 
@@ -66,8 +95,8 @@ except ImportError:
                 defaultButton='Cancel', cancelButton='Cancel', dismissString='Cancel' )
     
     if result == 'Download Module':
-        mc.showHelp('http://morganloomis.com/download/animationScripts/ml_utilities.py',absolute=True)
-    
+        mc.showHelp('http://morganloomis.com/tool/ml_utilities/',absolute=True)
+
 def ui():
     '''
     User interface for ml_lockAndHideAttributes
@@ -93,27 +122,27 @@ then hit the appropriate button.''') as win:
 
 def lock(*args):
     setAttributeState(lock=True)
-    
+
 
 def hide(*args):
     setAttributeState(hide=True)
-    
+
 
 def unlock(*args):
     setAttributeState(lock=False)
-    
+
 
 def unhide(*args):
     setAttributeState(hide=False)
-    
+
 
 def lockAndHide(*args):
     setAttributeState(lock=True, hide=True)
-    
+
 
 def unlockAndUnhide(*args):
     setAttributeState(lock=False, hide=False)
-    
+
 
 def setAttributeState(lock=None, hide=None):
 
@@ -135,10 +164,10 @@ def setAttributeState(lock=None, hide=None):
             ud = mc.listAttr(obj, userDefined=True)
             if ud:
                 attrs+=ud
-                
+
         elif doAll:
             attrs = mc.listAttr(obj, keyable=True)
-        
+
         if lock is not None:
             kwargs['lock'] = lock
         if hide is not None:
@@ -156,3 +185,5 @@ def setAttributeState(lock=None, hide=None):
 # Revision 1: 2011-10-08 : First publish.
 #
 # Revision 2: 2014-03-01 : adding category
+#
+# Revision 3: 2018-02-17 : Updating license to MIT.

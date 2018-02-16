@@ -1,40 +1,67 @@
-# 
-#   -= ml_utilities.py =-
+# -= ml_utilities.py =-
 #                __   by Morgan Loomis
 #     ____ ___  / /  http://morganloomis.com
-#    / __ `__ \/ /  Licensed under Creative Commons BY-SA
-#   / / / / / / /  http://creativecommons.org/licenses/by-sa/3.0/
-#  /_/ /_/ /_/_/  _________                                   
-#               /_________/  Revision 31, 2017-06-30
-#      _______________________________
-# - -/__ Installing Python Scripts __/- - - - - - - - - - - - - - - - - - - - 
+#    / __ `__ \/ /  Revision 32
+#   / / / / / / /  2018-02-17
+#  /_/ /_/ /_/_/  _________
+#               /_________/
+# 
+#     ______________
+# - -/__ License __/- - - - - - - - - - - - - - - - - - - - - - - - - - - - - 
+# 
+# Copyright 2018 Morgan Loomis
+# 
+# Permission is hereby granted, free of charge, to any person obtaining a copy of 
+# this software and associated documentation files (the "Software"), to deal in 
+# the Software without restriction, including without limitation the rights to use, 
+# copy, modify, merge, publish, distribute, sublicense, and/or sell copies of the 
+# Software, and to permit persons to whom the Software is furnished to do so, 
+# subject to the following conditions:
+# 
+# The above copyright notice and this permission notice shall be included in all 
+# copies or substantial portions of the Software.
+# 
+# THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR 
+# IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY, FITNESS 
+# FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR 
+# COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER 
+# IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN 
+# CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
+# 
+#     ___________________
+# - -/__ Installation __/- - - - - - - - - - - - - - - - - - - - - - - - - - 
 # 
 # Copy this file into your maya scripts directory, for example:
 #     C:/Documents and Settings/user/My Documents/maya/scripts/ml_utilities.py
 # 
-# Run the tool by importing the module, and then calling the primary function.
-# From python, this looks like:
+# Run the tool in a python shell or shelf button by importing the module, 
+# and then calling the primary function:
+# 
 #     import ml_utilities
 #     ml_utilities._showHelpCommand()
-# From MEL, this looks like:
-#     python("import ml_utilities;ml_utilities._showHelpCommand()");
-#      _________________
+# 
+# 
+#     __________________
 # - -/__ Description __/- - - - - - - - - - - - - - - - - - - - - - - - - - - 
 # 
-# ml_utilities isn't a stand alone tool, but rather it's a collection of support functions
-# that are required by several of the tools in this library. The individual tools will tell
-# you if this script is required.
-#      ___________
+# A collection of support functions that are required by several of the tools in
+# this library. The individual tools will tell you if this script is required.
+# 
+#     ____________
 # - -/__ Usage __/- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - 
 # 
-# ml_utilities isn't a stand alone tool, and so it isn't meant to be used directly.
-# However, you can certainly call these functions if they seem useful in your own scripts.
+# ml_utilities isn't a stand alone tool, and so it isn't meant to be used
+# directly. However, you can certainly call these functions if they seem useful in
+# your own scripts.
+# 
+# 
 #                                                             __________
 # - - - - - - - - - - - - - - - - - - - - - - - - - - - - - /_ Enjoy! _/- - -
+
 __author__ = 'Morgan Loomis'
-__license__ = 'Creative Commons Attribution-ShareAlike'
-__category__ = 'animationScripts'
-__revision__ = 31
+__license__ = 'MIT'
+__category__ = 'None'
+__revision__ = 32
 
 import maya.cmds as mc
 import maya.mel as mm
@@ -43,8 +70,10 @@ from functools import partial
 import shutil, os, re, sys, math
 
 #declare some variables
-websiteURL = 'http://morganloomis.com'
-wikiURL = websiteURL+'/wiki/tools.html'
+WEBSITE_URL = 'http://morganloomis.com'
+TOOL_URL = WEBSITE_URL+'/tool/'
+ICON_URL = WEBSITE_URL+'/icons/'
+GITHUB_ROOT_URL = 'https://raw.githubusercontent.com/morganloomis/ml_tools/master/'
 
 #try to add to the iconpath if there is an icons folder in this directory
 icon_path = os.path.join(os.path.dirname(__file__),'icons').replace('\\','/')
@@ -64,7 +93,7 @@ def main():
     '''
     This just launches the online help and serves as a placeholder for the default function for this script.
     '''
-    mc.showHelp(wikiURL+'#ml_utilities', absolute=True)
+    mc.showHelp(TOOL_URL+'ml_utilities/', absolute=True)
 
 
 def upToDateCheck(revision, prompt=True):
@@ -78,13 +107,13 @@ def upToDateCheck(revision, prompt=True):
 
     if revision > __revision__:
         if prompt and mc.optionVar(query='ml_utilities_revision') < revision:
-            result = mc.confirmDialog( title='Module Out of Date', 
+            result = mc.confirmDialog( title='Module Out of Date',
                                        message='Your version of ml_utilities may be out of date for this tool. Without the latest file you may encounter errors.',
-                                       button=['Download Latest Revision','Ignore', "Don't Ask Again"], 
+                                       button=['Download Latest Revision','Ignore', "Don't Ask Again"],
                                        defaultButton='Download Latest Revision', cancelButton='Ignore', dismissString='Ignore' )
 
             if result == 'Download Latest Revision':
-                mc.showHelp('http://mDynamicAnimUIorganloomis.com/download/animationScripts/ml_utilities.py', absolute=True)
+                mc.showHelp(GITHUB_ROOT_URL+'ml_utilities.py', absolute=True)
             elif result == "Don't Ask Again":
                 mc.optionVar(intValue=('ml_utilities_revision', revision))
         return False
@@ -158,7 +187,7 @@ def createAnimLayer(nodes=None, name=None, namePrefix='', override=True):
             if len(shortNodes) == 1:
                 name = namePrefix+shortNodes[0]
             else:
-                #try to find the longest common substring 
+                #try to find the longest common substring
                 commonString = longestCommonSubstring(shortNodes)
                 if commonString:
                     name = commonString
@@ -238,10 +267,10 @@ def createHotkey(command, name, description='', python=True):
     mc.scrollField('HotkeyEditorCommandField', edit=True, text=command)
 
 
-def createShelfButton(command, label='', name=None, description='', 
+def createShelfButton(command, label='', name=None, description='',
                       image=None, #the default image is a circle
-                      labelColor=(1, 0.5, 0), 
-                      labelBackgroundColor=(0, 0, 0, 0.5), 
+                      labelColor=(1, 0.5, 0),
+                      labelBackgroundColor=(0, 0, 0, 0.5),
                       backgroundColor=None
                       ):
     '''
@@ -281,7 +310,7 @@ def createShelfButton(command, label='', name=None, description='',
             kwargs['backgroundColor'] = backgroundColor
 
     return mc.shelfButton(parent=shelfTab, label=name, command=command,
-                          imageOverlayLabel=label, image=image, annotation=description, 
+                          imageOverlayLabel=label, image=image, annotation=description,
                           width=32, height=32, align='center', **kwargs)
 
 
@@ -373,7 +402,7 @@ def getChannelFromAnimCurve(curve, plugs=True):
 def getCurrentCamera():
     '''
     Returns the camera that you're currently looking through.
-    If the current highlighted panel isn't a modelPanel, 
+    If the current highlighted panel isn't a modelPanel,
     '''
 
     panel = mc.getPanel(withFocus=True)
@@ -389,11 +418,11 @@ def getCurrentCamera():
     if mc.getPanel(typeOf=panel) != 'modelPanel':
         OpenMaya.MGlobal.displayWarning('Please highlight a camera viewport.')
         return False
-    
+
     camShape = mc.modelEditor(panel, query=True, camera=True)
     if not camShape:
         return False
-    
+
     camNodeType = mc.nodeType(camShape)
     if mc.nodeType(camShape) == 'transform':
         return camShape
@@ -420,6 +449,33 @@ def getFrameRate():
         return 60
     if 'fps' in currentUnit:
         return int(currentUnit.substitute('fps',''))
+
+    return 1
+
+
+def getFrameRateInSeconds():
+
+    return 1.0/getFrameRate()
+
+
+def getDistanceInMeters():
+
+    unit = mc.currentUnit(query=True, linear=True)
+
+    if unit == 'mm':
+        return 1000
+    elif unit == 'cm':
+        return 100
+    elif unit == 'km':
+        return 0.001
+    elif unit == 'in':
+        return 39.3701
+    elif unit == 'ft':
+        return 3.28084
+    elif unit == 'yd':
+        return 1.09361
+    elif unit == 'mi':
+        return 0.000621371
 
     return 1
 
@@ -458,7 +514,7 @@ def getIcon(name):
         #on some linux systems each path ends with %B, for some reason
         iconPath = os.path.abspath(each.replace('%B',''))
         iconPath = os.path.join(iconPath,name)
-        if os.path.exists(iconPath):        
+        if os.path.exists(iconPath):
             return name
 
     return None
@@ -480,20 +536,15 @@ def getIconPath():
 
 
 def getNamespace(node):
-    '''Returns the namespace of a node with simple string parsing. Now supports nested namespaces.'''
+    '''Returns the namespace of a node with simple string parsing.'''
 
-    namespace = ''
-
-    if node and mc.objExists(node):
-        shortName = mc.ls(node, shortNames=True)[0]
-        if ':' in shortName:
-            namespace = shortName.rpartition(':')[0]
-            namespace+=':'
-    return namespace
+    if not ':' in node:
+        return ''
+    return node.rsplit(':',1)[0] + ':'
 
 
 def getRoots(nodes):
-    
+
     objs = mc.ls(nodes, long=True)
     tops = list()
     namespaces = list()
@@ -548,7 +599,7 @@ def getSkinCluster(mesh):
     '''
     Return the first skinCluster affecting this mesh.
     '''
-    
+
     if mc.nodeType(mesh) in ('mesh','nurbsSurface','nurbsCurve'):
         shapes = [mesh]
     else:
@@ -673,7 +724,7 @@ def matchBake(source=None, destination=None, bakeOnOnes=False, maintainOffset=Fa
 
                 keytimes[d][a] = currKeytimes
                 allKeyTimes.extend(currKeytimes)
-                
+
                 #errors in maya 2016.5?
                 try:
                     itt[d][a] = mc.keyTangent(s, attribute=a, time=(start,end), query=True, inTangentType=True)
@@ -681,7 +732,7 @@ def matchBake(source=None, destination=None, bakeOnOnes=False, maintainOffset=Fa
                 except RuntimeError as err:
                     itt[d][a] = ['auto'] * len(currKeytimes)
                     ott[d][a] = ['auto'] * len(currKeytimes)
-                    
+
                 if preserveTangentWeight and mc.keyTangent(s, attribute=a, query=True, weightedTangents=True)[0]:
                     weighted[d][a] = True
                     itw[d][a] = mc.keyTangent(s, attribute=a, time=(start,end), query=True, inWeight=True)
@@ -703,7 +754,7 @@ def matchBake(source=None, destination=None, bakeOnOnes=False, maintainOffset=Fa
                     ott[d][a].insert(0,'spline')
                     if a in weighted[d]:
                         itw[d][a].insert(0, 1.0)
-                        otw[d][a].insert(0, 1.0)                    
+                        otw[d][a].insert(0, 1.0)
                 if not end in keytimes[d][a]:
                     keytimes[d][a].append(end)
                     itt[d][a].append('spline')
@@ -737,16 +788,16 @@ def matchBake(source=None, destination=None, bakeOnOnes=False, maintainOffset=Fa
                         try:
                             v = mc.getAttr(duplicates[d]+'.'+a)
                             if bakeOnOnes:
-                                mc.setKeyframe(d, attribute=a, time=frame, 
+                                mc.setKeyframe(d, attribute=a, time=frame,
                                                value=v,
                                                itt='spline',
                                                ott='spline')
                                 mc.setAttr(d+'.'+a, v)
                             elif a in keytimes[d] and frame in keytimes[d][a]:
                                 #tangent types line up with keytimes
-                                mc.setKeyframe(d, attribute=a, time=frame, 
-                                               value=v, 
-                                               itt=itt[d][a].pop(), 
+                                mc.setKeyframe(d, attribute=a, time=frame,
+                                               value=v,
+                                               itt=itt[d][a].pop(),
                                                ott=ott[d][a].pop()
                                                )
                                 mc.setAttr(d+'.'+a, v)
@@ -761,7 +812,7 @@ def matchBake(source=None, destination=None, bakeOnOnes=False, maintainOffset=Fa
                         if a in weighted[d]:
                             mc.keyTangent(d, attribute=a, edit=True, weightedTangents=True)
                             for frame in keytimes[d][a]:
-                                mc.keyTangent(d, attribute=a, time=(frame,), edit=True, absolute=True, inWeight=itw[d][a].pop(), outWeight=otw[d][a].pop())                                
+                                mc.keyTangent(d, attribute=a, time=(frame,), edit=True, absolute=True, inWeight=itw[d][a].pop(), outWeight=otw[d][a].pop())
 
         #reset time and selection
         mc.currentTime(resetTime, edit=True)
@@ -854,7 +905,7 @@ def setAnimValue(plug, value, tangentType=None):
             ott = tangentType
             if tangentType == 'step':
                 itt = 'linear'
-            mc.keyTangent(plug, time=(time,), edit=True, itt=itt, ott=ott)                                            
+            mc.keyTangent(plug, time=(time,), edit=True, itt=itt, ott=ott)
 
     mc.setAttr(plug, value)
 
@@ -882,7 +933,7 @@ class Dragger(object):
             self.draggerContext = mc.draggerContext(self.draggerContext)
 
         mc.draggerContext(self.draggerContext, edit=True,
-                          pressCommand=self.press, 
+                          pressCommand=self.press,
                           dragCommand=self.drag,
                           releaseCommand=self.release,
                           cursor=cursor,
@@ -905,7 +956,7 @@ class Dragger(object):
 
     def drag(self, *args):
         '''
-        This is what is actually run during the drag, updating the coordinates and calling the 
+        This is what is actually run during the drag, updating the coordinates and calling the
         placeholder drag functions depending on which button is pressed.
         '''
 
@@ -991,28 +1042,28 @@ class IsolateViews():
     '''
     Isolates selection with nothing selected for all viewports
     This speeds up any process that causes the viewport to refresh,
-    such as baking or changing time. 
+    such as baking or changing time.
     '''
 
     def __enter__(self):
-        
+
         if MAYA_VERSION >= 2016.5:
             if not mc.ogs(query=True, pause=True):
                 mc.ogs(pause=True)
         else:
             self.sel = mc.ls(sl=True)
             self.modelPanels = mc.getPanel(type='modelPanel')
-    
+
             #unfortunately there's no good way to know what's been isolated, so in this case if a view is isolated, skip it.
             self.skip = list()
             for each in self.modelPanels:
                 if mc.isolateSelect(each, query=True, state=True):
                     self.skip.append(each)
-    
+
             self.isolate(True)
-    
+
             mc.select(clear=True)
-    
+
         self.resetAutoKey = mc.autoKeyframe(query=True, state=True)
         mc.autoKeyframe(state=False)
 
@@ -1025,12 +1076,12 @@ class IsolateViews():
         if MAYA_VERSION >= 2016.5:
             if mc.ogs(query=True, pause=True):
                 mc.ogs(pause=True)
-        else:        
+        else:
             if self.sel:
                 mc.select(self.sel)
-    
+
             self.isolate(False)
-            
+
 
     def isolate(self, state):
 
@@ -1063,7 +1114,7 @@ class KeySelection(object):
         self._curves = list()
         self._channels = list()
 
-        #time variables 
+        #time variables
         self.currentTime = mc.currentTime(query=True)
         self._time = None
         self._timeRangeStart = None
@@ -1219,7 +1270,7 @@ class KeySelection(object):
         for c in self.curves:
             curveValues = mc.keyframe(c, query=True, valueChange=True)
             if len(curveValues) == 1:
-                curveValues = (curveValues[0],)            
+                curveValues = (curveValues[0],)
             valueList.append(curveValues)
         return valueList
 
@@ -1373,9 +1424,9 @@ class KeySelection(object):
 
         if not self.nodeSelection:
             return False
-        
+
         tops = getRoots(self.nodeSelection)
-        
+
         if not tops:
             #if we haven't been sucessful, we're done
             return False
@@ -1463,7 +1514,7 @@ class KeySelection(object):
         Option to include the current frame.
         '''
 
-        t = self.currentTime        
+        t = self.currentTime
         if not includeCurrent:
             t-=self.shortestTime
         self._timeRangeEnd = t
@@ -1506,7 +1557,7 @@ class KeySelection(object):
 
     def setKeyframe(self, deleteSubFrames=False, **kwargs):
         '''
-        Wrapper for the setKeyframe command. Curve and time arguments will be provided based on 
+        Wrapper for the setKeyframe command. Curve and time arguments will be provided based on
         how this object was intitialized, otherwise usage is the same as maya's setKeyframe command.
         Option to delete sub-frames after keying.
         '''
@@ -1554,7 +1605,7 @@ class KeySelection(object):
 
     def keyframe(self,**kwargs):
         '''
-        Wrapper for the keyframe command. Curve and time arguments will be provided based on 
+        Wrapper for the keyframe command. Curve and time arguments will be provided based on
         how this object was intitialized, otherwise usage is the same as maya's keyframe command.
         '''
         if self.selected:
@@ -1568,7 +1619,7 @@ class KeySelection(object):
 
     def cutKey(self, includeSubFrames=False, **kwargs):
         '''
-        Wrapper for the cutKey command. Curve and time arguments will be provided based on 
+        Wrapper for the cutKey command. Curve and time arguments will be provided based on
         how this object was intitialized, otherwise usage is the same as maya's cutKey command.
         Option to delete sub-frames.
         '''
@@ -1701,7 +1752,7 @@ class KeySelection(object):
             for x in keyTimes:
                 if x - self.currentTime > tolerence:
                     findTime=x
-                    break        
+                    break
         elif which == 'first':
             findTime = keyTimes[0]
         elif which == 'last':
@@ -1773,7 +1824,7 @@ class MlUi(object):
         self.column = mc.columnLayout(adj=True)
 
 
-        mc.rowLayout( numberOfColumns=2, columnWidth2=(34, self.width-34), adjustableColumn=2, 
+        mc.rowLayout( numberOfColumns=2, columnWidth2=(34, self.width-34), adjustableColumn=2,
                       columnAlign2=('right','left'),
                       columnAttach=[(1, 'both', 0), (2, 'both', 8)] )
 
@@ -1785,7 +1836,7 @@ class MlUi(object):
 
         if not self.menu:
             mc.popupMenu(button=1)
-            mc.menuItem(label='Help', command=(_showHelpCommand(wikiURL+'#'+self.name)))
+            mc.menuItem(label='Help', command=(_showHelpCommand(TOOL_URL+self.name+'/')))
 
         mc.text(label=self.info)
         mc.setParent('..')
@@ -1829,20 +1880,20 @@ class MlUi(object):
             argString = ', label="'+shelfLabel+'"'
 
         mc.menu(label='Tools')
-        mc.menuItem(label='Add to shelf', 
+        mc.menuItem(label='Add to shelf',
                     command='import ml_utilities;ml_utilities.createShelfButton("import '+module+';'+module+'.ui()", name="'+self.name+'", description="Open the UI for '+self.name+'."'+argString+')')
         if not self.icon:
             mc.menuItem(label='Get Icon',
-                        command=(_showHelpCommand(websiteURL+'/wp-content/files/'+self.name+'.png')))
-        mc.menuItem(label='Get More Tools!', 
-                    command=(_showHelpCommand(websiteURL+'/downloads')))
+                        command=(_showHelpCommand(ICON_URL+self.name+'.png')))
+        mc.menuItem(label='Get More Tools!',
+                    command=(_showHelpCommand(WEBSITE_URL+'/tools/')))
         mc.setParent( '..', menu=True )
 
         mc.menu(label='Help')
         mc.menuItem(label='About', command=self.about)
-        mc.menuItem(label='Documentation', command=(_showHelpCommand(wikiURL+'#'+self.name)))
-        mc.menuItem(label='Python Command Documentation', command=(_showHelpCommand(wikiURL+'#\%5B\%5B'+self.name+'\%20Python\%20Documentation\%5D\%5D')))
-        mc.menuItem(label='Submit a Bug or Request', command=(_showHelpCommand(websiteURL+'/contact/')))
+        mc.menuItem(label='Documentation', command=(_showHelpCommand(TOOL_URL+self.name+'/')))
+        mc.menuItem(label='Python Command Documentation', command=(_showHelpCommand(TOOL_URL+'#\%5B\%5B'+self.name+'\%20Python\%20Documentation\%5D\%5D')))
+        mc.menuItem(label='Submit a Bug or Request', command=(_showHelpCommand(WEBSITE_URL+'/about/')))
 
         mc.setParent( '..', menu=True )
 
@@ -1908,20 +1959,20 @@ class MlUi(object):
                     command='import ml_utilities;ml_utilities.createHotkey(\"'+melCommand+'\", \"'+self.name+'\", description=\"'+annotation+'\")',
                     enableCommandRepeat=True,
                     image='commandButton')
-    
-    
+
+
     def selectionField(self, label='', annotation='', channel=False, text=''):
         '''
         Create a field with a button that adds the selection to the field.
         '''
-        field = mc.textFieldButtonGrp(label=label, text=text, 
+        field = mc.textFieldButtonGrp(label=label, text=text,
                                       buttonLabel='Set Selected')
         mc.textFieldButtonGrp(field, edit=True, buttonCommand=partial(self._populateSelectionField, channel, field))
         return field
-        
-        
+
+
     def _populateSelectionField(self, channel, field, *args):
-        
+
         selectedChannels = None
         if channel:
             selectedChannels = getSelectedChannels()
@@ -1929,20 +1980,20 @@ class MlUi(object):
                 raise RuntimeError('Please select an attribute in the channelBox.')
             if len(selectedChannels) > 1:
                 raise RuntimeError('Please select only one attribute.')
-            
+
         sel = mc.ls(sl=True)
         if not sel:
             raise RuntimeError('Please select a node.')
         if len(sel) > 1:
             raise RuntimeError('Please select only one node.')
-        
+
         selection = sel[0]
         if selectedChannels:
             selection = selection+'.'+selectedChannels[0]
-            
+
         mc.textFieldButtonGrp(field, edit=True, text=selection)
-    
-    
+
+
     def selectionList(self, channel=False, **kwargs):
         tsl = mc.textScrollList(**kwargs)
         mc.button(label='Append Selected', command=partial(self._populateSelectionList, channel, tsl))
@@ -1970,7 +2021,7 @@ class MlUi(object):
             selection = selection+'.'+selectedChannels[0]
 
         mc.textScrollList(control, edit=True, append=[selection])
-        
+
 
     class ButtonWithPopup():
 
@@ -1997,7 +2048,7 @@ class MlUi(object):
             mc.menuItem(label='Create Shelf Button', command=self.createShelfButton, image=shelfIcon)
 
             mc.menuItem(label='Create Hotkey',
-                        command=self.createHotkey, image='commandButton') 
+                        command=self.createHotkey, image='commandButton')
 
 
         def readUI(self):
@@ -2096,7 +2147,7 @@ class MlUi(object):
 
 class SkipUndo():
     '''
-    Skips adding the encapsulated commands to the undo queue, so that you 
+    Skips adding the encapsulated commands to the undo queue, so that you
     cannot undo them.
     '''
 
@@ -2115,7 +2166,7 @@ class SkipUndo():
 
 class UndoChunk():
     '''
-    In versions of maya before 2011, python doesn't always undo properly, so in 
+    In versions of maya before 2011, python doesn't always undo properly, so in
     some cases we have to manage the undo queue ourselves.
     '''
 
@@ -2138,9 +2189,9 @@ class Vector:
 
     def __init__(self, x=0, y=0, z=0):
         '''
-        Initialize the vector with 3 values, or else 
+        Initialize the vector with 3 values, or else
         '''
-        
+
         if self._isCompatible(x):
             x = x[0]
             y = x[1]
@@ -2151,7 +2202,7 @@ class Vector:
 
     def __repr__(self):
         return 'Vector({0:.2f}, {1:.2f}, {2:.2f})'.format(*self)
-    
+
     #iterator methods
     def __iter__(self):
         return iter((self.x, self.y, self.z))
@@ -2172,34 +2223,34 @@ class Vector:
         if isinstance(other,(Vector,list,tuple)) and len(other)==3:
             return True
         return False
-    
+
 
     def __add__(self, other):
-        
+
         if not self._isCompatible(other):
-            raise TypeError('Can only add to another vector of the same dimension.')        
-        
+            raise TypeError('Can only add to another vector of the same dimension.')
+
         return Vector(*[a+b for a,b in zip(self,other)])
 
 
     def __sub__(self, other):
-        
+
         if not self._isCompatible(other):
-            raise TypeError('Can only subtract another vector of the same dimension.')  
-        
+            raise TypeError('Can only subtract another vector of the same dimension.')
+
         return Vector(*[a-b for a,b in zip(self,other)])
-    
-    
+
+
     def __mul__(self, other):
-        
+
         if self._isCompatible(other):
             return Vector(*[a*b for a,b in zip(self,other)])
         elif isinstance(other, (float,int,long)):
             return Vector(*[x*float(other) for x in self])
         else:
             raise TypeError("Can't multiply {} with {}".format(self, other))
-        
-        
+
+
     def __div__(self, other):
         if isinstance(other, (float,int,long)):
             return Vector(*[x/float(other) for x in self])
@@ -2225,7 +2276,7 @@ class Vector:
         if d:
             return self/d
         return self
-        
+
 
     def dot(self, other):
         if not self._isCompatible(other):
@@ -2240,9 +2291,9 @@ class Vector:
                        -self.x * other.z + self.z * other.x,
                        self.x * other.y - self.y * other.x)
 
-    
+
 #      ______________________
-# - -/__ Revision History __/- - - - - - - - - - - - - - - - - - - - - - - - 
+# - -/__ Revision History __/- - - - - - - - - - - - - - - - - - - - - - - -
 #
 # Revision 1: : First publish
 #
@@ -2307,3 +2358,5 @@ class Vector:
 # Revision 30: 2017-06-13 : unify version test, isolate view update
 #
 # Revision 31: 2017-06-30 : getCamera support for stereo camera
+#
+# Revision 32: 2018-02-17 : Updating license to MIT.

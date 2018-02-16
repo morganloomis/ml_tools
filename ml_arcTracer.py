@@ -1,58 +1,88 @@
-# 
-#   -= ml_arcTracer.py =-
+# -= ml_arcTracer.py =-
 #                __   by Morgan Loomis
 #     ____ ___  / /  http://morganloomis.com
-#    / __ `__ \/ /  Licensed under Creative Commons BY-SA
-#   / / / / / / /  http://creativecommons.org/licenses/by-sa/3.0/
-#  /_/ /_/ /_/_/  _________                                   
-#               /_________/  Revision 6, 2017-06-30
-#      _______________________________
-# - -/__ Installing Python Scripts __/- - - - - - - - - - - - - - - - - - - - 
+#    / __ `__ \/ /  Revision 7
+#   / / / / / / /  2018-02-17
+#  /_/ /_/ /_/_/  _________
+#               /_________/
+# 
+#     ______________
+# - -/__ License __/- - - - - - - - - - - - - - - - - - - - - - - - - - - - - 
+# 
+# Copyright 2018 Morgan Loomis
+# 
+# Permission is hereby granted, free of charge, to any person obtaining a copy of 
+# this software and associated documentation files (the "Software"), to deal in 
+# the Software without restriction, including without limitation the rights to use, 
+# copy, modify, merge, publish, distribute, sublicense, and/or sell copies of the 
+# Software, and to permit persons to whom the Software is furnished to do so, 
+# subject to the following conditions:
+# 
+# The above copyright notice and this permission notice shall be included in all 
+# copies or substantial portions of the Software.
+# 
+# THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR 
+# IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY, FITNESS 
+# FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR 
+# COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER 
+# IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN 
+# CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
+# 
+#     ___________________
+# - -/__ Installation __/- - - - - - - - - - - - - - - - - - - - - - - - - - 
 # 
 # Copy this file into your maya scripts directory, for example:
 #     C:/Documents and Settings/user/My Documents/maya/scripts/ml_arcTracer.py
 # 
-# Run the tool by importing the module, and then calling the primary function.
-# From python, this looks like:
+# Run the tool in a python shell or shelf button by importing the module, 
+# and then calling the primary function:
+# 
 #     import ml_arcTracer
 #     ml_arcTracer.ui()
-# From MEL, this looks like:
-#     python("import ml_arcTracer;ml_arcTracer.ui()");
-#      _________________
+# 
+# 
+#     __________________
 # - -/__ Description __/- - - - - - - - - - - - - - - - - - - - - - - - - - - 
 # 
-# This tool is a substitute for tracing arcs on your screen by hand with a marker.
-# It creates a thick line to represent the path of an object, either as an overlay on your camera view,
-# or in world space. It's a bake process; like a marker it doesn't update interactively.
-# Lines are colored randomly, to distinguish between multiple traces.
-# Frames are marked along the arc as black dots, with keyframes colored red, and
-# the current frame is highlighted.
-#      ___________
+# Create a line on screen which traces the path af an animated object. It's
+# Substitute for tracing arcs on your screen by hand with a marker. It can be used
+# either as an overlay on your camera view, or in world space. It's a bake
+# process; like a marker it doesn't update interactively. Lines are colored to
+# distinguish between multiple traces. Frames are marked along the arc as black
+# dots, with keyframes colored red, and the current frame is highlighted.
+# 
+#     ____________
 # - -/__ Usage __/- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - 
 # 
 # Run the UI, and press the buttons to choose the action.
-#      ____________________
-# - -/__ Video Tutorial __/- - - - - - - - - - - - - - - - - - - - - - - - - 
+# 
+#     ____________
+# - -/__ Video __/- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - 
 # 
 # http://www.youtube.com/watch?v=xLA1aglvPYM
-#      ________________
-# - -/__ UI Options __/- - - - - - - - - - - - - - - - - - - - - - - - - - - 
+# 
+#     _________
+# - -/__ Ui __/- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - 
 # 
 # [Trace Camera] : Trace an arc as an overlay over the current camera.
 # [Trace World] : Trace an arc in world space.
 # [Retrace Previous] : Retrace the previously traced arc.
 # [Clear Arcs] : Clear all arcs.
-#      __________________
+# 
+#     ___________________
 # - -/__ Requirements __/- - - - - - - - - - - - - - - - - - - - - - - - - - 
 # 
 # This script requires the ml_utilities module, which can be downloaded here:
-# 	http://morganloomis.com/wiki/tools.html#ml_utilities
+#     https://raw.githubusercontent.com/morganloomis/ml_tools/master/ml_utilities.py
+# 
 #                                                             __________
 # - - - - - - - - - - - - - - - - - - - - - - - - - - - - - /_ Enjoy! _/- - -
+
 __author__ = 'Morgan Loomis'
-__license__ = 'Creative Commons Attribution-ShareAlike'
-__category__ = 'animationScripts'
-__revision__ = 6
+__license__ = 'MIT'
+__category__ = 'None'
+__revision__ = 7
+
 import maya.cmds as mc
 import maya.mel as mm
 from maya import OpenMaya
@@ -61,7 +91,7 @@ from functools import partial
 
 try:
     import ml_utilities as utl
-    utl.upToDateCheck(31)
+    utl.upToDateCheck(32)
 except ImportError:
     result = mc.confirmDialog( title='Module Not Found', 
                 message='This tool requires the ml_utilities module. Once downloaded you will need to restart Maya.', 
@@ -69,8 +99,8 @@ except ImportError:
                 defaultButton='Cancel', cancelButton='Cancel', dismissString='Cancel' )
     
     if result == 'Download Module':
-        mc.showHelp('http://morganloomis.com/download/animationScripts/ml_utilities.py',absolute=True)
-    
+        mc.showHelp('http://morganloomis.com/tool/ml_utilities/',absolute=True)
+
 def ui():
     '''
     User interface for arc tracer
@@ -78,31 +108,31 @@ def ui():
 
     globalScale = 1
     if mc.optionVar(exists='ml_arcTracer_brushGlobalScale'):
-        globalScale = mc.optionVar(query='ml_arcTracer_brushGlobalScale')       
+        globalScale = mc.optionVar(query='ml_arcTracer_brushGlobalScale')
 
     with utl.MlUi('ml_arcTracer', 'Arc Tracer', width=400, height=180, info='''Select objects to trace.
 Choose camera space or worldspace arc.
 Press clear to delete the arcs, or retrace to redo the last arc.''') as win:
 
-        win.buttonWithPopup(label='Trace Camera', command=traceCamera, annotation='Trace an arc as an overlay over the current camera.', 
+        win.buttonWithPopup(label='Trace Camera', command=traceCamera, annotation='Trace an arc as an overlay over the current camera.',
                             shelfLabel='cam', shelfIcon='flowPathObj')#motionTrail
-        win.buttonWithPopup(label='Trace World', command=traceWorld, annotation='Trace an arc in world space.', 
+        win.buttonWithPopup(label='Trace World', command=traceWorld, annotation='Trace an arc in world space.',
                             shelfLabel='world', shelfIcon='flowPathObj')
-        win.buttonWithPopup(label='Retrace Previous', command=retraceArc, annotation='Retrace the previously traced arc.', 
+        win.buttonWithPopup(label='Retrace Previous', command=retraceArc, annotation='Retrace the previously traced arc.',
                             shelfLabel='retrace', shelfIcon='flowPathObj')
-        win.buttonWithPopup(label='Clear Arcs', command=clearArcs, annotation='Clear all arcs.', 
+        win.buttonWithPopup(label='Clear Arcs', command=clearArcs, annotation='Clear all arcs.',
                             shelfLabel='clear', shelfIcon='flowPathObj')
         fsg = mc.floatSliderGrp( label='Line Width', minValue=0.1, maxValue=5, value=globalScale)
         mc.floatSliderGrp(fsg, edit=True, dragCommand=partial(setLineWidthCallback, fsg))
-        
-        
+
+
 def setLineWidthCallback(slider, *args):
     value = mc.floatSliderGrp(slider, query=True, value=True)
     for each in mc.ls('ml_arcTracer_brush_*', type='brush'):
         mc.setAttr(each+'.globalScale', value)
-    
+
     mc.optionVar(floatValue=('ml_arcTracer_brushGlobalScale', value))
-        
+
 
 def traceCamera(*args):
     '''
@@ -130,54 +160,54 @@ def traceArc(space='camera'):
     '''
     The main function for creating the arc.
     '''
-    
+
     if space != 'world' and space != 'camera':
         OpenMaya.MGlobal.displayWarning('Improper space argument.')
         return
-    
+
     global ML_TRACE_ARC_PREVIOUS_SELECTION
     global ML_TRACE_ARC_PREVIOUS_SPACE
-    
+
     globalScale = 1
     if mc.optionVar(exists='ml_arcTracer_brushGlobalScale'):
-        globalScale = mc.optionVar(query='ml_arcTracer_brushGlobalScale')        
-    
+        globalScale = mc.optionVar(query='ml_arcTracer_brushGlobalScale')
+
     #save for reset:
     origTime = mc.currentTime(query=True)
-    
+
     #frame range
     frameRange = utl.frameRange()
     start = frameRange[0]
     end = frameRange[1]
-    
+
     #get neccesary nodes
     objs = mc.ls(sl=True, type='transform')
     if not objs:
         OpenMaya.MGlobal.displayWarning('Select objects to trace')
         return
-    
+
     ML_TRACE_ARC_PREVIOUS_SELECTION = objs
     ML_TRACE_ARC_PREVIOUS_SPACE = space
-    
+
     cam = None
     nearClipPlane = None
     shortCam = ''
     if space=='camera':
         cam = utl.getCurrentCamera()
-    
+
         #the arc will be placed just past the clip plane distance, but no closer than 1 unit.
         nearClipPlane = max(mc.getAttr(cam+'.nearClipPlane'),1)
-        
+
         shortCam = mc.ls(cam, shortNames=True)[0]
-    
+
     topGroup = 'ml_arcGroup'
     worldGrp = 'ml_arcWorldGrp'
     localGrp = 'ml_localGrp_'+shortCam
-    
+
     #create nodes
     if not mc.objExists(topGroup):
         topGroup = mc.group(empty=True, name=topGroup)
-    
+
     parentGrp = topGroup
     if space=='world' and not mc.objExists(worldGrp):
         worldGrp = mc.group(empty=True, name=worldGrp)
@@ -185,66 +215,66 @@ def traceArc(space='camera'):
         mc.setAttr(worldGrp+'.overrideDisplayType',2)
         mc.parent(worldGrp, topGroup)
         parentGrp = mc.ls(worldGrp)[0]
-    
+
     if space == 'camera':
         camConnections = mc.listConnections(cam+'.message', plugs=True, source=False, destination=True)
         if camConnections:
             for cc in camConnections:
                 if '.ml_parentCam' in cc:
                     localGrp = mc.ls(cc, o=True)[0]
-        
+
         if not mc.objExists(localGrp):
             localGrp = mc.group(empty=True, name=localGrp)
             mc.parentConstraint(cam, localGrp)
             mc.setAttr(localGrp+'.overrideEnabled',1)
             mc.setAttr(localGrp+'.overrideDisplayType',2)
             mc.parent(localGrp, topGroup)
-            
+
             mc.addAttr(localGrp, at='message', longName='ml_parentCam')
             mc.connectAttr(cam+'.message', localGrp+'.ml_parentCam')
-            
+
         parentGrp = mc.ls(localGrp)[0]
-    
+
     #group per object:
     group = []
     points = []
-    
+
     for i,obj in enumerate(objs):
         sn = mc.ls(obj,shortNames=True)[0]
         name = sn.replace(':','_')
-    
+
         points.append([])
         groupName = 'ml_%s_arcGrp' % name
         if mc.objExists(groupName):
             mc.delete(groupName)
-        
+
         group.append(mc.group(empty=True, name=groupName))
-        
+
         group[i] = mc.parent(group[i],parentGrp)[0]
         mc.setAttr(group[i]+'.translate', 0,0,0)
         mc.setAttr(group[i]+'.rotate', 0,0,0)
-    
+
     with utl.UndoChunk():
-    
+
         camSample = None
         camROO = 0
         if space=='camera':
             camSample = mc.spaceLocator()[0]
             mc.parentConstraint(cam, camSample)
             camROO = mc.getAttr(cam+'.rotateOrder')
-        
+
         for i,obj in enumerate(objs):
             sample = mc.spaceLocator()[0]
             mc.pointConstraint(obj, sample)
 
             #frame loop:
             time = range(int(start),int(end+1))
-            
+
             for t in time:
                 objPnt = []
                 for attr in ('.tx','.ty','.tz'):
                     objPnt.append(getWorldValueAtFrame(sample+attr, t))
-                
+
                 if space=='camera':
                     camPnt = []
                     for attr in ('.tx','.ty','.tz'):
@@ -260,28 +290,28 @@ def traceArc(space='camera'):
                     vec.normalize()
                     #multiply here to offset from camera
                     vec=vec*nearClipPlane*1.2
-                    
+
                     oriLoc = mc.spaceLocator()[0]
                     mc.setAttr(oriLoc+'.rotateOrder', camROO)
                     mc.setAttr(oriLoc+'.rotate', *[math.degrees(x) for x in camRot])
-                    
+
                     loc = mc.spaceLocator()[0]
                     mc.setAttr(loc+'.translate', *vec[:])
                     loc = mc.parent(loc, oriLoc)[0]
-                    
+
                     trans = mc.getAttr(loc+'.translate')
-                    points[i].append(trans[0]) 
-                    
+                    points[i].append(trans[0])
+
                     mc.delete(oriLoc)
 
                 elif space=='world':
                     points[i].append(objPnt)
-            
+
             mc.delete(sample)
 
         if camSample:
             mc.delete(camSample)
-       
+
         #create the curves and do paint effects
         mc.ResetTemplateBrush()
         brush = mc.getDefaultBrush()
@@ -302,7 +332,7 @@ def traceArc(space='camera'):
             for c in ('R','G','B'):
                 color = random.uniform(0.3,0.7)
                 mc.setAttr(brush+'.color1'+c,color)
-            
+
             baseCurve = mc.curve(d=3,p=points[i])
             #fitBspline makes a curve that goes THROUGH the points, a more accurate path
             curve = mc.fitBspline(baseCurve, constructionHistory=False, tolerance=0.001)
@@ -312,7 +342,7 @@ def traceArc(space='camera'):
             mc.AttachBrushToCurves(curve)
             stroke = mc.ls(sl=True)[0]
             mc.rename(mc.listConnections(stroke+'.brush', destination=False)[0], 'ml_arcTracer_brush_#')
-            
+
             stroke = mc.parent(stroke,group[i])[0]
 
             mc.setAttr(stroke+'.overrideEnabled',1)
@@ -392,10 +422,9 @@ def traceArc(space='camera'):
             mc.modelEditor(panel, edit=True, strokes=True)
         except:
             pass
-    
+
     mc.select(objs,replace=True)
     mc.refresh()
-    
 
 
 def retraceArc(*args):
@@ -427,23 +456,23 @@ def applyBrush(curve, parent):
     '''
     Simply applies the paint effects brush to the curve with the settings we want.
     '''
-    
+
     mc.AttachBrushToCurves(curve)
     stroke = mc.ls(sl=True)[0]
     stroke = mc.parent(stroke,parent)[0]
-    
+
     mc.setAttr(stroke+'.displayPercent',92)
     mc.setAttr(stroke+'.sampleDensity',0.5)
     mc.setAttr(stroke+'.inheritsTransform',0)
     mc.setAttr(stroke+'.translate',0,0,0)
     mc.setAttr(stroke+'.rotate',0,0,0)
-    
+
     return stroke
 
 if __name__ == '__main__':ui()
 
 #      ______________________
-# - -/__ Revision History __/- - - - - - - - - - - - - - - - - - - - - - - - 
+# - -/__ Revision History __/- - - - - - - - - - - - - - - - - - - - - - - -
 #
 # Revision 1: 2011-05-01 : First publish
 #
@@ -456,3 +485,5 @@ if __name__ == '__main__':ui()
 # Revision 5: 2016-12-10 : removing euclid dependency
 #
 # Revision 6: 2017-06-30 : Fixing bug with moving cameras, adding line width
+#
+# Revision 7: 2018-02-17 : Updating license to MIT.

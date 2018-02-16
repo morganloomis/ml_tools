@@ -1,50 +1,78 @@
-# 
-#   -= ml_puppet.py =-
+# -= ml_puppet.py =-
 #                __   by Morgan Loomis
 #     ____ ___  / /  http://morganloomis.com
-#    / __ `__ \/ /  Licensed under Creative Commons BY-SA
-#   / / / / / / /  http://creativecommons.org/licenses/by-sa/3.0/
-#  /_/ /_/ /_/_/  _________                                   
-#               /_________/  Revision 23, 2017-07-07
-#      _______________________________
-# - -/__ Installing Python Scripts __/- - - - - - - - - - - - - - - - - - - - 
+#    / __ `__ \/ /  Revision 24
+#   / / / / / / /  2018-02-17
+#  /_/ /_/ /_/_/  _________
+#               /_________/
+# 
+#     ______________
+# - -/__ License __/- - - - - - - - - - - - - - - - - - - - - - - - - - - - - 
+# 
+# Copyright 2018 Morgan Loomis
+# 
+# Permission is hereby granted, free of charge, to any person obtaining a copy of 
+# this software and associated documentation files (the "Software"), to deal in 
+# the Software without restriction, including without limitation the rights to use, 
+# copy, modify, merge, publish, distribute, sublicense, and/or sell copies of the 
+# Software, and to permit persons to whom the Software is furnished to do so, 
+# subject to the following conditions:
+# 
+# The above copyright notice and this permission notice shall be included in all 
+# copies or substantial portions of the Software.
+# 
+# THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR 
+# IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY, FITNESS 
+# FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR 
+# COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER 
+# IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN 
+# CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
+# 
+#     ___________________
+# - -/__ Installation __/- - - - - - - - - - - - - - - - - - - - - - - - - - 
 # 
 # Copy this file into your maya scripts directory, for example:
 #     C:/Documents and Settings/user/My Documents/maya/scripts/ml_puppet.py
 # 
-# Run the tool by importing the module, and then calling the primary function.
-# From python, this looks like:
+# Run the tool in a python shell or shelf button by importing the module, 
+# and then calling the primary function:
+# 
 #     import ml_puppet
 #     ml_puppet.main()
-# From MEL, this looks like:
-#     python("import ml_puppet;ml_puppet.main()");
-#      _________________
+# 
+# 
+#     __________________
 # - -/__ Description __/- - - - - - - - - - - - - - - - - - - - - - - - - - - 
 # 
-# Support tools for puppets created by http://morganloomis.com/puppeteer
-#      ___________
+# Support tools for puppets.
+# 
+#     ____________
 # - -/__ Usage __/- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - 
 # 
-# Launch the UI to see the options available. Press a button to make a
-# selection or run a command. Right click buttons to create a hotkey for that option.
-# All options are selection-sensitive, so for example if you have two 
-# puppets referenced into a scene, and select any part of one of them and
-# run selectControls, it will select all the controls for that puppet only.
-# With nothing selected it will select all controls in the scene.
-# For Fk/Ik switching, select any part of the element you want to switch.
-# So for an arm, you can select the ik hand control, the fk shoulder, 
-# the pole vector, and either way it will know to do the switch for that arm.
-#      __________________
+# Launch the UI to see the options available. Press a button to make a selection
+# or run a command. Right click buttons to create a hotkey for that option. All
+# options are selection-sensitive, so for example if you have two puppets
+# referenced into a scene, and select any part of one of them and run
+# selectControls, it will select all the controls for that puppet only. With
+# nothing selected it will select all controls in the scene. For Fk/Ik switching,
+# select any part of the element you want to switch. So for an arm, you can select
+# the ik hand control, the fk shoulder, the pole vector, and either way it will
+# know to do the switch for that arm.
+# 
+# 
+#     ___________________
 # - -/__ Requirements __/- - - - - - - - - - - - - - - - - - - - - - - - - - 
 # 
 # This script requires the ml_utilities module, which can be downloaded here:
-# 	http://morganloomis.com/wiki/tools.html#ml_utilities
+#     https://raw.githubusercontent.com/morganloomis/ml_tools/master/ml_utilities.py
+# 
 #                                                             __________
 # - - - - - - - - - - - - - - - - - - - - - - - - - - - - - /_ Enjoy! _/- - -
+
 __author__ = 'Morgan Loomis'
-__license__ = 'Creative Commons Attribution-ShareAlike'
-__category__ = 'animationScripts'
-__revision__ = 23
+__license__ = 'MIT'
+__category__ = 'None'
+__revision__ = 24
 
 import maya.cmds as mc
 import maya.mel as mm
@@ -53,7 +81,7 @@ import math, re, warnings
 
 try:
     import ml_utilities as utl
-    utl.upToDateCheck(31)
+    utl.upToDateCheck(32)
 except ImportError:
     result = mc.confirmDialog( title='Module Not Found', 
                 message='This tool requires the ml_utilities module. Once downloaded you will need to restart Maya.', 
@@ -61,8 +89,8 @@ except ImportError:
                 defaultButton='Cancel', cancelButton='Cancel', dismissString='Cancel' )
     
     if result == 'Download Module':
-        mc.showHelp('http://morganloomis.com/download/animationScripts/ml_utilities.py',absolute=True)
-    
+        mc.showHelp('http://morganloomis.com/tool/ml_utilities/',absolute=True)
+
 ml_convertRotationOrder = None
 try:
     import ml_convertRotationOrder
@@ -93,15 +121,15 @@ def ui():
     with utl.MlUi('ml_puppet', 'Puppet Interface', width=400, height=130, info='''Support tools for Puppets, including group selection and fk/ik switching.
 Selection tools and switching tools are based on element selection.
 Right click buttons to create hotkeys.''') as win:
-        win.ButtonWithPopup(label='Select Puppets', name=win.name, command=selectPuppets, 
+        win.ButtonWithPopup(label='Select Puppets', name=win.name, command=selectPuppets,
                             annotation='Selects the puppet top node(s) of a given selection. No selection selects all puppets in scene.')
-        win.ButtonWithPopup(label='Select All Controls', name=win.name, command=selectControls, 
+        win.ButtonWithPopup(label='Select All Controls', name=win.name, command=selectControls,
                             annotation='Select all controls for the selected puppet. No selection selects all controls in scene.')
-        win.ButtonWithPopup(label='Select All Element Controls', name=win.name, command=selectElementControls, 
+        win.ButtonWithPopup(label='Select All Element Controls', name=win.name, command=selectElementControls,
                             annotation='Select all controls within a selected element.')
-        win.ButtonWithPopup(label='Fk/Ik Switch', name=win.name, command=fkIkSwitchUI, 
+        win.ButtonWithPopup(label='Fk/Ik Switch', name=win.name, command=fkIkSwitchUI,
                             annotation='Toggle selected element between FK and IK.')
-        #win.ButtonWithPopup(label='Space Switch', name=win.name, command=spaceSwitchUI, 
+        #win.ButtonWithPopup(label='Space Switch', name=win.name, command=spaceSwitchUI,
         #                            annotation='Toggle selected element between FK and IK.')
 
 
@@ -111,9 +139,9 @@ def fkIkSwitchUI(*args):
 Selection tools and switching tools are based on element selection.
 Right click buttons to create hotkeys.''') as win:
 
-        win.ButtonWithPopup(label='Fk/Ik Switch Current Frame', name=win.name, command=fkIkSwitchSel, 
+        win.ButtonWithPopup(label='Fk/Ik Switch Current Frame', name=win.name, command=fkIkSwitchSel,
                             annotation='Toggle selected element between FK and IK.')
-        win.ButtonWithPopup(label='Fk/Ik Switch Frame Range', name=win.name, command=fkIkSwitchRangeSel, 
+        win.ButtonWithPopup(label='Fk/Ik Switch Frame Range', name=win.name, command=fkIkSwitchRangeSel,
                             annotation='Bake selected element from FK to IK and vice versa.')
 
 
@@ -126,7 +154,7 @@ def fkIkSwitchRangeSel(*args):
 
 
 def getPuppets(node=None):
-    
+
     if node:
         puppets = []
         if not isinstance(node, (list,tuple)):
@@ -301,10 +329,10 @@ def getNodesOfType(nodeType, namespaceFromNodes=None):
 
     allNodes = []
 
-    #if something is selected, get it from within that namespace.    
+    #if something is selected, get it from within that namespace.
     if not namespaceFromNodes:
         namespaceFromNodes = mc.ls(sl=True)
-    namespaces = []    
+    namespaces = []
     if namespaceFromNodes:
         for each in namespaceFromNodes:
             namespaces.append(utl.getNamespace(each))
@@ -316,7 +344,7 @@ def getNodesOfType(nodeType, namespaceFromNodes=None):
             #special case for commonly queried nodes, for speed
             #get with and without namespaces
             allNodes.extend(mc.ls(ns+'*.'+PUP_ID_PREFIX+nodeType, o=True))
-    return allNodes        
+    return allNodes
 
 
 def showAllControls(puppet, *args):
@@ -349,7 +377,7 @@ def snap(node, snapTo):
 
 
 def hasFlippedParent(node, testRange=3):
-    
+
     parent = mc.listRelatives(node, parent=True, pa=True)
     for null in range(testRange):
         if not parent:
@@ -426,9 +454,9 @@ def fkIkData(element):
                 else:
                     data['ikMatchTo'].append(None)
             else:
-                data['ikMatchTo'].append(None)                    
+                data['ikMatchTo'].append(None)
 
-    if mc.attributeQuery(pvAttr, node=element, exists=True):            
+    if mc.attributeQuery(pvAttr, node=element, exists=True):
         con = mc.listConnections(element+'.'+pvAttr, source=True, destination=False)
         if con:
             data['pvControl'] = con[0]
@@ -482,21 +510,21 @@ def fkIkSwitch(nodes=None, switchTo=None, switchRange=False, bakeOnOnes=False):
             if fkIkState < 0.5:
                 elemDict[elem]['switchTo'] = 1
             else:
-                elemDict[elem]['switchTo'] = 0        
+                elemDict[elem]['switchTo'] = 0
 
         if elemDict[elem]['switchTo'] == 1:
             #ik
-            
+
             #key fk controls to preserve position
             if switchRange:
                 mc.setKeyframe(data['fkChain'], animated=True, insert=True, time=(start,end))
             else:
                 mc.setKeyframe(data['fkChain'], animated=True)
-            
+
             for a, b in zip(data['ikControls'], data['ikMatchTo']):
                 locator = mc.spaceLocator(name='TEMP#')[0]
                 snap(locator, b)
-                
+
                 #flip the locator if the control's parent is scaled in -X
                 if hasFlippedParent(a):
                     mc.setAttr(locator+'.rotateX', mc.getAttr(locator+'.rotateX') + 180)
@@ -543,7 +571,7 @@ def fkIkSwitch(nodes=None, switchTo=None, switchRange=False, bakeOnOnes=False):
                 mc.setKeyframe(controls, animated=True, insert=True, time=(start,end))
             else:
                 mc.setKeyframe(controls, animated=True)
-            
+
             for x in data['baseChain']:
                 locator = mc.spaceLocator(name='TEMP#')[0]
                 snap(locator, x)
@@ -583,7 +611,7 @@ def fkIkSwitch(nodes=None, switchTo=None, switchRange=False, bakeOnOnes=False):
                         if mc.keyframe(x+'.'+attr, query=True, name=True):
                             mc.cutKey(x+'.'+attr, time=(start, end), includeUpperBound=False)
                             mc.setKeyframe(x+'.'+attr, time=(start,end), value=default)
-                            
+
                         else:
                             try:
                                 utl.setAnimValue(x+'.'+attr, default)
@@ -614,7 +642,7 @@ def fkIkSwitch(nodes=None, switchTo=None, switchRange=False, bakeOnOnes=False):
         if switchRange:
             for f in range(int(start), int(end)):
                 if not f in elemDict[elem]['keytimes']:
-                    mc.cutKey(elemDict[elem]['controls'], time=(f,))            
+                    mc.cutKey(elemDict[elem]['controls'], time=(f,))
 
             if mc.keyframe(switchPlug, query=True, name=True):
                 mc.cutKey(switchPlug, time=(start,end))
@@ -644,7 +672,7 @@ def matchPoleVectorControl(jointChain, pv=None, doSnap=True):
 
     def distanceBetween(a,b):
         difference = [x-y for x,y in zip(a,b)]
-        return math.sqrt(sum([x**2 for x in difference]))    
+        return math.sqrt(sum([x**2 for x in difference]))
 
     p1 = mc.xform(jointChain[0], query=True, rotatePivot=True, worldSpace=True)
     p2 = mc.xform(jointChain[1], query=True, rotatePivot=True, worldSpace=True)
@@ -717,22 +745,22 @@ def switchSpace(nodes=None, toSpace=None, switchRange=False, bakeOnOnes=False):
             print 'Space value not valid:',toSpace
             continue
         currentValue = mc.getAttr(node+'.'+ssAttr)
-        
+
         if currentValue == value:
             print '{} space already set to {}, skipping'.format(node, toSpace)
             continue
 
         locator = mc.spaceLocator(name='TEMP#')[0]
         snap(locator, node)
-        
+
         #need to test flipped before and after switch
         preFlipped = hasFlippedParent(node)
-        
+
         mc.setAttr(node+'.'+ssAttr, value)
         postFlipped = hasFlippedParent(node)
-        
+
         mc.setAttr(node+'.'+ssAttr, currentValue)
-        
+
         #flip locator if we're going to or from a mirrored space
         if preFlipped != postFlipped:
             mc.setAttr(locator+'.rotateX', mc.getAttr(locator+'.rotateX') + 180)
@@ -783,7 +811,7 @@ def initPuppetContextMenu():
         return
 
     #get the file name
-    filename = result.split('found in: ')[-1]    
+    filename = result.split('found in: ')[-1]
 
     #globalize a proc which would otherwise fail
     mm.eval('''global proc optionalDagMenuProc( string $parent, string $item )
@@ -813,7 +841,7 @@ def initPuppetContextMenu():
         switch( $nt ) {
           case "subdiv":
             subdOptionalDagMenuProc( $parent, $item );
-            menuItem -d true; 
+            menuItem -d true;
             break;
           default:
             string $apiNt = `nodeType -api $shape`;
@@ -829,7 +857,6 @@ def initPuppetContextMenu():
     }
 }
 ''')
-
 
     procRE = re.compile('(?<=global proc\s).+(?=\()')
 
@@ -955,22 +982,22 @@ def puppetContextMenu(parent, node):
             append = 's'
         mc.menuItem(label='Reset Control'+append, command=ml_resetChannels.resetPuppetControl)
         mc.menuItem(divider=True)
-    
+
     puppetAttributes = ['geometrySelectable','controlMode']
     if puppet and puppetAttributes:
         doAttrs = []
         for attr in puppetAttributes:
             if mc.attributeQuery(attr, node=puppet, exists=True):
                 doAttrs.append(attr)
-        
+
         if doAttrs:
             mc.menuItem(label='Puppet Settings', subMenu=True)
-            
+
             for attr in doAttrs:
                 attributeMenuItem(puppet, attr)
-            
+
             mc.setParent('..', menu=True)
-        
+
     #selection
     if element or puppet:
 
@@ -983,7 +1010,7 @@ def puppetContextMenu(parent, node):
         mc.menuItem(label='Select Ik Controls', command=partial(selectIkControls, nodes))
         mc.menuItem(label='Select Fk Controls', command=partial(selectFkControls, nodes))
         #invert control selection
-        mc.menuItem(label='Invert Selection', command=partial(invertSelection, nodes))        
+        mc.menuItem(label='Invert Selection', command=partial(invertSelection, nodes))
         mc.setParent('..', menu=True)
 
         mc.menuItem(divider=True, dividerLabel='Visibility')
@@ -1076,13 +1103,13 @@ def puppetContextMenu(parent, node):
 
 
 def attributeMenuItem(node, attr):
-    
+
     plug = node+'.'+attr
     niceName = mc.attributeName(plug, nice=True)
-    
+
     #get attribute type
     attrType = mc.getAttr(plug, type=True)
-    
+
     if attrType == 'enum':
         listEnum = mc.attributeQuery(attr, node=node, listEnum=True)[0]
         if not ':' in listEnum:
@@ -1096,8 +1123,8 @@ def attributeMenuItem(node, attr):
         value = mc.getAttr(plug)
         label = 'Toggle '+ niceName
         mc.menuItem(label=label, command=partial(mc.setAttr, plug, not value))
-    
-    
+
+
 def convertRotateOrderUI(nodes, *args):
     '''
     wrapper
@@ -1156,7 +1183,7 @@ def getMirrorPairs(nodes):
 def getMirrorAxis(node):
 
     axis = []
-    if mc.attributeQuery('mirrorAxis', exists=True, node=node):        
+    if mc.attributeQuery('mirrorAxis', exists=True, node=node):
         mirrorAxis = mc.getAttr('{}.mirrorAxis'.format(node))
         if mirrorAxis and not hasFlippedParent(node):
             axis = mirrorAxis.split(',')
@@ -1209,7 +1236,7 @@ def copyPose(fromNode, toNode, flip=False):
         if flip:
             try:
                 utl.setAnimValue(fromPlug, toValue)
-            except:pass    
+            except:pass
 
 
 def mirrorPose(nodes, *args):
@@ -1311,7 +1338,7 @@ def mirrorAnimation(nodes, *args):
 
 def flipAnimation(nodes, *args):
 
-    nodes = mc.ls(nodes, long=True)    
+    nodes = mc.ls(nodes, long=True)
     pairs = getMirrorPairs(nodes)
     flipSingles = [x for x in nodes if x not in pairs.keys()]
 
@@ -1376,3 +1403,5 @@ def flipAnimation(nodes, *args):
 # Revision 22: 2017-06-30 : proper testing for puppet
 #
 # Revision 23: 2017-07-07 : space switch and mirroring bugs
+#
+# Revision 24: 2018-02-17 : Updating license to MIT.

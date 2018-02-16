@@ -1,52 +1,80 @@
-# 
-#   -= ml_selectKeyed.py =-
+# -= ml_selectKeyed.py =-
 #                __   by Morgan Loomis
 #     ____ ___  / /  http://morganloomis.com
-#    / __ `__ \/ /  Licensed under Creative Commons BY-SA
-#   / / / / / / /  http://creativecommons.org/licenses/by-sa/3.0/
-#  /_/ /_/ /_/_/  _________                                   
-#               /_________/  Revision 5, 2014-03-01
-#      _______________________________
-# - -/__ Installing Python Scripts __/- - - - - - - - - - - - - - - - - - - - 
+#    / __ `__ \/ /  Revision 6
+#   / / / / / / /  2018-02-17
+#  /_/ /_/ /_/_/  _________
+#               /_________/
+# 
+#     ______________
+# - -/__ License __/- - - - - - - - - - - - - - - - - - - - - - - - - - - - - 
+# 
+# Copyright 2018 Morgan Loomis
+# 
+# Permission is hereby granted, free of charge, to any person obtaining a copy of 
+# this software and associated documentation files (the "Software"), to deal in 
+# the Software without restriction, including without limitation the rights to use, 
+# copy, modify, merge, publish, distribute, sublicense, and/or sell copies of the 
+# Software, and to permit persons to whom the Software is furnished to do so, 
+# subject to the following conditions:
+# 
+# The above copyright notice and this permission notice shall be included in all 
+# copies or substantial portions of the Software.
+# 
+# THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR 
+# IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY, FITNESS 
+# FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR 
+# COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER 
+# IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN 
+# CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
+# 
+#     ___________________
+# - -/__ Installation __/- - - - - - - - - - - - - - - - - - - - - - - - - - 
 # 
 # Copy this file into your maya scripts directory, for example:
 #     C:/Documents and Settings/user/My Documents/maya/scripts/ml_selectKeyed.py
 # 
-# Run the tool by importing the module, and then calling the primary function.
-# From python, this looks like:
+# Run the tool in a python shell or shelf button by importing the module, 
+# and then calling the primary function:
+# 
 #     import ml_selectKeyed
 #     ml_selectKeyed.main()
-# From MEL, this looks like:
-#     python("import ml_selectKeyed;ml_selectKeyed.main()");
-#      _________________
+# 
+# 
+#     __________________
 # - -/__ Description __/- - - - - - - - - - - - - - - - - - - - - - - - - - - 
 # 
-# Select any node in an animated hierarchy, such as a puppet, and run
-# the command to select all the nodes in the hierarchy that are keyed.
-# If the selected object has a namespace, it will only return nodes in 
-# that namespace. The top node of the hierarchy is excluded.
-#      ___________
+# Select all keyed nodes within a puppet. Select any node in an animated
+# hierarchy, such as a puppet, and run the command to select all the nodes in the
+# hierarchy that are keyed. If the selected object has a namespace, it will only
+# return nodes in that namespace.
+# 
+#     ____________
 # - -/__ Usage __/- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - 
 # 
-# Select a node in an animated hierarchy, and run the command directly, as
-# a hotkey or shelf button.
-#      __________________
+# Select a node in an animated hierarchy, and run the command directly, as a
+# hotkey or shelf button.
+# 
+# 
+#     ___________________
 # - -/__ Requirements __/- - - - - - - - - - - - - - - - - - - - - - - - - - 
 # 
 # This script requires the ml_utilities module, which can be downloaded here:
-# 	http://morganloomis.com/wiki/tools.html#ml_utilities
+#     https://raw.githubusercontent.com/morganloomis/ml_tools/master/ml_utilities.py
+# 
 #                                                             __________
 # - - - - - - - - - - - - - - - - - - - - - - - - - - - - - /_ Enjoy! _/- - -
+
 __author__ = 'Morgan Loomis'
-__license__ = 'Creative Commons Attribution-ShareAlike'
-__category__ = 'animationScripts'
-__revision__ = 5
+__license__ = 'MIT'
+__category__ = 'None'
+__revision__ = 6
 
 import maya.cmds as mc
 
 try:
     import ml_utilities as utl
-    utl.upToDateCheck(9)
+    utl.upToDateCheck(32)
 except ImportError:
     result = mc.confirmDialog( title='Module Not Found', 
                 message='This tool requires the ml_utilities module. Once downloaded you will need to restart Maya.', 
@@ -54,21 +82,21 @@ except ImportError:
                 defaultButton='Cancel', cancelButton='Cancel', dismissString='Cancel' )
     
     if result == 'Download Module':
-        mc.showHelp('http://morganloomis.com/download/animationScripts/ml_utilities.py',absolute=True)
-    
+        mc.showHelp('http://morganloomis.com/tool/ml_utilities/',absolute=True)
+
 def main():
     '''
-    Select any node in a hierarchy, and run the script. 
+    Select any node in a hierarchy, and run the script.
     It will select all keyed objects within the hierarchy
     except the root node. If the selected object has a namespace,
     only nodes within that namespace will be selected.
     '''
-    
+
     keySel = utl.KeySelection()
     if keySel.keyedInHierarchy():
         mc.select(keySel.nodes, replace=True)
-        
-        
+
+
 if __name__ == '__main__': main()
 
 #      ______________________
@@ -79,3 +107,5 @@ if __name__ == '__main__': main()
 # Revision 4: 2012-06-10 : Fixing small bug when selecting objects that aren't in a hierarchy.
 #
 # Revision 5: 2014-03-01 : adding category
+#
+# Revision 6: 2018-02-17 : Updating license to MIT.

@@ -1,64 +1,92 @@
-# 
-#   -= ml_hold.py =-
+# -= ml_hold.py =-
 #                __   by Morgan Loomis
 #     ____ ___  / /  http://morganloomis.com
-#    / __ `__ \/ /  Licensed under Creative Commons BY-SA
-#   / / / / / / /  http://creativecommons.org/licenses/by-sa/3.0/
-#  /_/ /_/ /_/_/  _________                                   
-#               /_________/  Revision 6, 2015-01-10
-#      _______________________________
-# - -/__ Installing Python Scripts __/- - - - - - - - - - - - - - - - - - - - 
+#    / __ `__ \/ /  Revision 7
+#   / / / / / / /  2018-02-17
+#  /_/ /_/ /_/_/  _________
+#               /_________/
+# 
+#     ______________
+# - -/__ License __/- - - - - - - - - - - - - - - - - - - - - - - - - - - - - 
+# 
+# Copyright 2018 Morgan Loomis
+# 
+# Permission is hereby granted, free of charge, to any person obtaining a copy of 
+# this software and associated documentation files (the "Software"), to deal in 
+# the Software without restriction, including without limitation the rights to use, 
+# copy, modify, merge, publish, distribute, sublicense, and/or sell copies of the 
+# Software, and to permit persons to whom the Software is furnished to do so, 
+# subject to the following conditions:
+# 
+# The above copyright notice and this permission notice shall be included in all 
+# copies or substantial portions of the Software.
+# 
+# THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR 
+# IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY, FITNESS 
+# FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR 
+# COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER 
+# IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN 
+# CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
+# 
+#     ___________________
+# - -/__ Installation __/- - - - - - - - - - - - - - - - - - - - - - - - - - 
 # 
 # Copy this file into your maya scripts directory, for example:
 #     C:/Documents and Settings/user/My Documents/maya/scripts/ml_hold.py
 # 
-# Run the tool by importing the module, and then calling the primary function.
-# From python, this looks like:
+# Run the tool in a python shell or shelf button by importing the module, 
+# and then calling the primary function:
+# 
 #     import ml_hold
 #     ml_hold.ui()
-# From MEL, this looks like:
-#     python("import ml_hold;ml_hold.ui()");
-#      _________________
+# 
+# 
+#     __________________
 # - -/__ Description __/- - - - - - - - - - - - - - - - - - - - - - - - - - - 
 # 
-# This is a tool for creating animation holds, either for individual
-# poses or over a range of keys. Select a range of keys in the graph editor
-# or the time slider, or match your current pose to the next or previous one.
-#      ___________
+# Quickly create animation holds, either for individual poses or over a range of
+# keys. Select a range of keys in the graph editor or the time slider, or match
+# your current pose to the next or previous one.
+# 
+#     ____________
 # - -/__ Usage __/- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - 
 # 
-# Run the UI. 
-# Press Next and Previous to match keys to the value of next or previous keyframes.
-# Press Current or Average to turn a frame range into a hold. Current sets the 
-# hold to be the current value, and average sets the value to the average of 
-# all keys across the range. The range is determined by one of 3 things, 
-# in the following order: 1. Selected range in the time slider. 2. The highest
-# and lowest selected keys in the graph editor. 3. If nothing is selected,
-# the previous and next keys from the current time determine the range.
-# If you have no keys selectd, all commands will operate only on curves
-# that are visibile in the graph editor.
-#      ____________________
-# - -/__ Video Tutorial __/- - - - - - - - - - - - - - - - - - - - - - - - - 
+# Run the UI. Press Next and Previous to match keys to the value of next or
+# previous keyframes. Press Current or Average to turn a frame range into a hold.
+# Current sets the hold to be the current value, and average sets the value to the
+# average of all keys across the range. The range is determined by one of 3
+# things, in the following order: 1. Selected range in the time slider. 2. The
+# highest and lowest selected keys in the graph editor. 3. If nothing is selected,
+# the previous and next keys from the current time determine the range. If you
+# have no keys selectd, all commands will operate only on curves that are visibile
+# in the graph editor.
+# 
+#     ____________
+# - -/__ Video __/- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - 
 # 
 # http://www.youtube.com/watch?v=fOeDwGbuHFE
-#      ________________
-# - -/__ UI Options __/- - - - - - - - - - - - - - - - - - - - - - - - - - - 
+# 
+#     _________
+# - -/__ Ui __/- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - 
 # 
 # [Hold Current] : Creates a hold for the selected range, or the surrounding keys, based on current frame.
 # [Hold Average] : Creates a hold for the selected range, or the surrounding keys, based on average of keys.
 # [<< Previous] : Matches selected key or current frame to the previous keyframe value.
 # [Next >>] : Matches selected key or current frame to the next keyframe value.
-#      __________________
+# 
+#     ___________________
 # - -/__ Requirements __/- - - - - - - - - - - - - - - - - - - - - - - - - - 
 # 
 # This script requires the ml_utilities module, which can be downloaded here:
-# 	http://morganloomis.com/wiki/tools.html#ml_utilities
+#     https://raw.githubusercontent.com/morganloomis/ml_tools/master/ml_utilities.py
+# 
 #                                                             __________
 # - - - - - - - - - - - - - - - - - - - - - - - - - - - - - /_ Enjoy! _/- - -
+
 __author__ = 'Morgan Loomis'
-__license__ = 'Creative Commons Attribution-ShareAlike'
-__category__ = 'animationScripts'
-__revision__ = 6
+__license__ = 'MIT'
+__category__ = 'None'
+__revision__ = 7
 
 import maya.cmds as mc
 import maya.mel as mm
@@ -66,7 +94,7 @@ from maya import OpenMaya
 
 try:
     import ml_utilities as utl
-    utl.upToDateCheck(11)
+    utl.upToDateCheck(32)
 except ImportError:
     result = mc.confirmDialog( title='Module Not Found', 
                 message='This tool requires the ml_utilities module. Once downloaded you will need to restart Maya.', 
@@ -74,8 +102,8 @@ except ImportError:
                 defaultButton='Cancel', cancelButton='Cancel', dismissString='Cancel' )
     
     if result == 'Download Module':
-        mc.showHelp('http://morganloomis.com/download/animationScripts/ml_utilities.py',absolute=True)
-    
+        mc.showHelp('http://morganloomis.com/tool/ml_utilities/',absolute=True)
+
 
 def ui():
     '''
@@ -87,20 +115,20 @@ Press Current or Average to turn a frame range into a hold.''') as win:
 
         win.buttonWithPopup(label='Hold Current', command=current, annotation='Creates a hold for the selected range, or the surrounding keys, based on current frame.', shelfLabel='cur', shelfIcon='defaultTwoStackedLayout')
         win.buttonWithPopup(label='Hold Average', command=average, annotation='Creates a hold for the selected range, or the surrounding keys, based on average of keys.', shelfLabel='avg', shelfIcon='defaultTwoStackedLayout')
-        
+
         mc.paneLayout(configuration='vertical2',separatorThickness=1)
         win.buttonWithPopup(label='<< Previous', command=previous, annotation='Matches selected key or current frame to the previous keyframe value.', shelfLabel='<_', shelfIcon='defaultTwoStackedLayout')
         win.buttonWithPopup(label='Next >>', command=next, annotation='Matches selected key or current frame to the next keyframe value.', shelfLabel='_>', shelfIcon='defaultTwoStackedLayout')
-        
+
 
 def next(*args):
     '''Matches selected key or current frame to the next keyframe value.'''
     holdFrame(next=True)
-    
+
 def previous(*args):
     '''Matches selected key or current frame to the previous keyframe value.'''
     holdFrame(previous=True)
-    
+
 def current(*args):
     '''Creates a hold for the selected range, or the surrounding keys, based on current frame.'''
     holdRange(current=True)
@@ -126,7 +154,7 @@ def holdFrame(next=False, previous=False):
     if not sel:
         OpenMaya.MGlobal.displayWarning('Nothing selected.')
         return
-    
+
     curves = None
     start = None
     end = None
@@ -140,7 +168,7 @@ def holdFrame(next=False, previous=False):
         pass
     elif keySel.keyedChannels():
         pass
-    
+
     if keySel.selectedFrameRange():
         pass
     elif keySel.keyRange():
@@ -155,7 +183,7 @@ def holdFrame(next=False, previous=False):
     with utl.UndoChunk():
         itt,ott = utl.getHoldTangentType()
         selected = mc.keyframe(query=True, name=True, selected=True)
-            
+
         for curve in keySel.curves:
             value = None
             start = currentTime
@@ -175,21 +203,21 @@ def holdFrame(next=False, previous=False):
             elif previous:
                 start = mc.findKeyframe(curve, time=(findFrom,), which='previous')
                 value = mc.keyframe(curve, time=(start,), query=True, valueChange=True)[0]
-            
+
             #TODO: delete redundant keys
-            
+
             if (end-start) > 1:
                 mc.cutKey(curve, time=(start+0.1, end-0.1))
-            
+
             mc.keyframe(curve, time=(start,end), edit=True, valueChange=value)
-            
+
             #set tangents
             mc.keyTangent(curve, time=(start,end), itt=itt, ott=ott)
-        
+
 
 def holdRange(current=False, average=False):
     '''
-    Create a hold over a range of frames. 
+    Create a hold over a range of frames.
     Arguments:
         current: hold value comes from current frame
         average: hold value comes from the average of all keys over the range.
@@ -201,16 +229,16 @@ def holdRange(current=False, average=False):
         return
 
     sel = mc.ls(sl=True)
-    
+
     if not sel:
         OpenMaya.MGlobal.displayWarning('Nothing selected.')
         return
-        
+
     curves = None
     start = None
     end = None
     value = None
-    
+
     currentTime = mc.currentTime(query=True)
     graphVis = mc.selectionConnection('graphEditor1FromOutliner', query=True, obj=True)
 
@@ -234,19 +262,19 @@ def holdRange(current=False, average=False):
             keyTimes.sort()
             if keyTimes[0] == keyTimes[-1]:
                 return
-            
+
             start = keyTimes[0]
             end = keyTimes[-1]
-            
+
         else:
             if graphVis:
                 curves = mc.keyframe(graphVis, query=True, name=True)
             else:
                 curves = mc.keyframe(sel, query=True, name=True)
-                
+
             start = mc.findKeyframe(curves, time=(currentTime,), which='previous')
             end = mc.findKeyframe(curves, time=(currentTime,), which='next')
-            
+
     #set start and end frames
     mc.setKeyframe(curves, time=(start,end))
 
@@ -260,9 +288,9 @@ def holdRange(current=False, average=False):
                 if 'animCurveT' in mc.nodeType(curve):
                     plug = mc.listConnections('.'.join((curve,'output')), source=False, plugs=True)[0]
                     value = mc.getAttr(plug)
-                
+
             mc.keyframe(curve, time=(start,end), edit=True, valueChange=value)
-            
+
         #delete inbetweens
         if (end-start) > 1:
             mc.cutKey(curves, time=(start+0.1, end-0.1))
@@ -273,7 +301,7 @@ if __name__ == '__main__':
     ui()
 
 #      ______________________
-# - -/__ Revision History __/- - - - - - - - - - - - - - - - - - - - - - - - 
+# - -/__ Revision History __/- - - - - - - - - - - - - - - - - - - - - - - -
 #
 # Revision 1: : First publish
 #
@@ -282,3 +310,5 @@ if __name__ == '__main__':
 # Revision 5: 2014-03-01 : adding category
 #
 # Revision 6: 2015-01-10 : Fixed bug relating to KeySelection
+#
+# Revision 7: 2018-02-17 : Updating license to MIT.

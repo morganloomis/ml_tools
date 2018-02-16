@@ -1,62 +1,89 @@
-# 
-#   -= ml_resetBind.py =-
+# -= ml_resetBind.py =-
 #                __   by Morgan Loomis
 #     ____ ___  / /  http://morganloomis.com
-#    / __ `__ \/ /  Licensed under Creative Commons BY-SA
-#   / / / / / / /  http://creativecommons.org/licenses/by-sa/3.0/
-#  /_/ /_/ /_/_/  _________                                   
-#               /_________/  Revision 1, 2014-03-02
-#      _______________________________
-# - -/__ Installing Python Scripts __/- - - - - - - - - - - - - - - - - - - - 
+#    / __ `__ \/ /  Revision 2
+#   / / / / / / /  2018-02-17
+#  /_/ /_/ /_/_/  _________
+#               /_________/
+# 
+#     ______________
+# - -/__ License __/- - - - - - - - - - - - - - - - - - - - - - - - - - - - - 
+# 
+# Copyright 2018 Morgan Loomis
+# 
+# Permission is hereby granted, free of charge, to any person obtaining a copy of 
+# this software and associated documentation files (the "Software"), to deal in 
+# the Software without restriction, including without limitation the rights to use, 
+# copy, modify, merge, publish, distribute, sublicense, and/or sell copies of the 
+# Software, and to permit persons to whom the Software is furnished to do so, 
+# subject to the following conditions:
+# 
+# The above copyright notice and this permission notice shall be included in all 
+# copies or substantial portions of the Software.
+# 
+# THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR 
+# IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY, FITNESS 
+# FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR 
+# COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER 
+# IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN 
+# CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
+# 
+#     ___________________
+# - -/__ Installation __/- - - - - - - - - - - - - - - - - - - - - - - - - - 
 # 
 # Copy this file into your maya scripts directory, for example:
 #     C:/Documents and Settings/user/My Documents/maya/scripts/ml_resetBind.py
 # 
-# Run the tool by importing the module, and then calling the primary function.
-# From python, this looks like:
+# Run the tool in a python shell or shelf button by importing the module, 
+# and then calling the primary function:
+# 
 #     import ml_resetBind
 #     ml_resetBind.main()
-# From MEL, this looks like:
-#     python("import ml_resetBind;ml_resetBind.main()");
-#      _________________
+# 
+# 
+#     __________________
 # - -/__ Description __/- - - - - - - - - - - - - - - - - - - - - - - - - - - 
 # 
 # Quickly remove and recreate a skinCluster while maintaining history.
-# Essentially this allows you to "reset" the skin cluster after you've 
-# moved some joints. It also deletes the original bindPose node.
-#      ___________
+# Essentially this allows you to "reset" the skin cluster after you've moved some
+# joints. It also deletes the original bindPose node.
+# 
+#     ____________
 # - -/__ Usage __/- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - 
 # 
-# Select the skinned meshes you'd like to reset, and run the command. 
+# Select the skinned meshes you'd like to reset, and run the command.
+# 
+# 
 #                                                             __________
 # - - - - - - - - - - - - - - - - - - - - - - - - - - - - - /_ Enjoy! _/- - -
+
 __author__ = 'Morgan Loomis'
-__license__ = 'Creative Commons Attribution-ShareAlike'
-__category__ = 'riggingScripts'
-__revision__ = 1
+__license__ = 'MIT'
+__category__ = 'None'
+__revision__ = 2
 
 import maya.cmds as mc
 from maya import OpenMaya
 
 
 def main():
-    
+
     sel = mc.ls(sl=True)
-    
+
     for each in sel:
         shapes = mc.listRelatives(each, shapes=True)
-        
+
         for shape in shapes:
             #get skin cluster
             history = mc.listHistory(shape, groupLevels=True, pruneDagObjects=True)
             skins = mc.ls(history, type='skinCluster')
-            
+
             for skin in skins:
                 joints = mc.skinCluster(skin, query=True, influence=True)
-                
+
                 mc.setAttr(skin+'.envelope', 0)
                 mc.skinCluster(skin, edit=True, unbindKeepHistory=True)
-                
+
                 #delete bindPose
                 dagPose = mc.dagPose(each, query=True, bindPose=True)
                 if dagPose:
@@ -64,7 +91,7 @@ def main():
                 dagPose = mc.listConnections(skin+'.bindPose', d=False, type='dagPose')
                 if dagPose:
                     mc.delete(dagPose)
-                
+
                 mc.skinCluster(joints, shape, toSelectedBones=True)
                 mc.setAttr(skin+'.envelope', 1)
     if sel:
@@ -78,3 +105,5 @@ if __name__ == '__main__': main()
 # - -/__ Revision History __/- - - - - - - - - - - - - - - - - - - - - - - -
 #
 # Revision 1: 2014-03-02 : First publish.
+#
+# Revision 2: 2018-02-17 : Updating license to MIT.
