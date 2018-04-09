@@ -1,8 +1,8 @@
 # -= ml_arcTracer.py =-
 #                __   by Morgan Loomis
 #     ____ ___  / /  http://morganloomis.com
-#    / __ `__ \/ /  Revision 7
-#   / / / / / / /  2018-02-17
+#    / __ `__ \/ /  Revision 8
+#   / / / / / / /  2018-04-09
 #  /_/ /_/ /_/_/  _________
 #               /_________/
 # 
@@ -81,7 +81,7 @@
 __author__ = 'Morgan Loomis'
 __license__ = 'MIT'
 __category__ = 'None'
-__revision__ = 7
+__revision__ = 8
 
 import maya.cmds as mc
 import maya.mel as mm
@@ -156,12 +156,16 @@ def getWorldValueAtFrame(attr, frame):
     context = OpenMaya.MDGContext(OpenMaya.MTime(frame))
     return plug.asDouble(context)
 
+def getWorldValueAtFrameAccurate(attr, frame):
+    mc.currentTime(frame)
+    return mc.getAttr(attr)
+
 def traceArc(space='camera'):
     '''
     The main function for creating the arc.
     '''
 
-    if space != 'world' and space != 'camera':
+    if space not in ('world','camera'):
         OpenMaya.MGlobal.displayWarning('Improper space argument.')
         return
 
@@ -237,14 +241,12 @@ def traceArc(space='camera'):
 
     #group per object:
     group = []
-    points = []
 
     for i,obj in enumerate(objs):
         sn = mc.ls(obj,shortNames=True)[0]
         name = sn.replace(':','_')
 
-        points.append([])
-        groupName = 'ml_%s_arcGrp' % name
+        groupName = 'ml_{}_arcGrp'.format(name)
         if mc.objExists(groupName):
             mc.delete(groupName)
 
@@ -256,61 +258,20 @@ def traceArc(space='camera'):
 
     with utl.UndoChunk():
 
-        camSample = None
-        camROO = 0
-        if space=='camera':
-            camSample = mc.spaceLocator()[0]
-            mc.parentConstraint(cam, camSample)
-            camROO = mc.getAttr(cam+'.rotateOrder')
+        #determine the method to run. Test fast against accurate.
+        #If fast is the same, continue with fast method.
+        #Otherwise revert to accurate method.
 
-        for i,obj in enumerate(objs):
-            sample = mc.spaceLocator()[0]
-            mc.pointConstraint(obj, sample)
+        mc.currentTime(start)
+        fastPoints = arcDataFast([objs[0]], parentGrp, start+1, start+1, space, nearClipPlane, cam)
+        accuratePoints = arcDataAccurate([objs[0]], parentGrp, start+1, start+1, space, nearClipPlane, cam)
 
-            #frame loop:
-            time = range(int(start),int(end+1))
-
-            for t in time:
-                objPnt = []
-                for attr in ('.tx','.ty','.tz'):
-                    objPnt.append(getWorldValueAtFrame(sample+attr, t))
-
-                if space=='camera':
-                    camPnt = []
-                    for attr in ('.tx','.ty','.tz'):
-                        camPnt.append(getWorldValueAtFrame(camSample+attr, t))
-                    camRot = []
-                    for attr in ('.rx','.ry','.rz'):
-                        camRot.append(getWorldValueAtFrame(camSample+attr, t))
-
-                    objVec = utl.Vector(objPnt[0],objPnt[1],objPnt[2])
-                    camVec = utl.Vector(camPnt[0],camPnt[1],camPnt[2])
-
-                    vec = objVec-camVec
-                    vec.normalize()
-                    #multiply here to offset from camera
-                    vec=vec*nearClipPlane*1.2
-
-                    oriLoc = mc.spaceLocator()[0]
-                    mc.setAttr(oriLoc+'.rotateOrder', camROO)
-                    mc.setAttr(oriLoc+'.rotate', *[math.degrees(x) for x in camRot])
-
-                    loc = mc.spaceLocator()[0]
-                    mc.setAttr(loc+'.translate', *vec[:])
-                    loc = mc.parent(loc, oriLoc)[0]
-
-                    trans = mc.getAttr(loc+'.translate')
-                    points[i].append(trans[0])
-
-                    mc.delete(oriLoc)
-
-                elif space=='world':
-                    points[i].append(objPnt)
-
-            mc.delete(sample)
-
-        if camSample:
-            mc.delete(camSample)
+        points = None
+        #if they're equivalent, continue with fast:
+        if [int(x*1000000) for x in fastPoints[0][0]] == [int(x*1000000) for x in accuratePoints[0][0]]:
+            points = arcDataFast([objs[0]], parentGrp, start, end, space, nearClipPlane, cam)
+        else:
+            points = arcDataAccurate([objs[0]], parentGrp, start, end, space, nearClipPlane, cam)
 
         #create the curves and do paint effects
         mc.ResetTemplateBrush()
@@ -335,7 +296,7 @@ def traceArc(space='camera'):
 
             baseCurve = mc.curve(d=3,p=points[i])
             #fitBspline makes a curve that goes THROUGH the points, a more accurate path
-            curve = mc.fitBspline(baseCurve, constructionHistory=False, tolerance=0.001)
+            curve = mc.fitBspline(baseCurve, constructionHistory=False, tolerance=0.001, name='ml_arcTracer_curve_#')
             mc.delete(baseCurve)
 
             #paint fx
@@ -427,6 +388,113 @@ def traceArc(space='camera'):
     mc.refresh()
 
 
+def arcDataFast(objs, parentGrp, start, end, space, nearClipPlane, cam=None):
+
+    points = []
+    camSample = None
+    camROO = 0
+    if space=='camera':
+        camSample = mc.spaceLocator()[0]
+        mc.parentConstraint(cam, camSample)
+        camROO = mc.getAttr(cam+'.rotateOrder')
+
+    for i,obj in enumerate(objs):
+        points.append([])
+        sample = mc.spaceLocator()[0]
+        mc.pointConstraint(obj, sample)
+
+        #frame loop:
+        time = range(int(start),int(end+1))
+
+        for t in time:
+            objPnt = []
+            for attr in ('.tx','.ty','.tz'):
+                objPnt.append(getWorldValueAtFrame(sample+attr, t))
+
+            if space=='camera':
+                camPnt = []
+                for attr in ('.tx','.ty','.tz'):
+                    camPnt.append(getWorldValueAtFrame(camSample+attr, t))
+                camRot = []
+                for attr in ('.rx','.ry','.rz'):
+                    camRot.append(getWorldValueAtFrame(camSample+attr, t))
+
+                objVec = utl.Vector(objPnt[0],objPnt[1],objPnt[2])
+                camVec = utl.Vector(camPnt[0],camPnt[1],camPnt[2])
+
+                vec = objVec-camVec
+                vec.normalize()
+                #multiply here to offset from camera
+                vec=vec*nearClipPlane*1.2
+
+                oriLoc = mc.spaceLocator()[0]
+                mc.setAttr(oriLoc+'.rotateOrder', camROO)
+                mc.setAttr(oriLoc+'.rotate', *[math.degrees(x) for x in camRot])
+
+                loc = mc.spaceLocator()[0]
+                mc.setAttr(loc+'.translate', *vec[:])
+                loc = mc.parent(loc, oriLoc)[0]
+
+                trans = mc.getAttr(loc+'.translate')
+                points[i].append(trans[0])
+
+                mc.delete(oriLoc)
+
+            elif space=='world':
+                points[i].append(objPnt)
+
+        mc.delete(sample)
+
+    if camSample:
+        mc.delete(camSample)
+
+    return points
+
+
+def arcDataAccurate(objs, parentGrp, start, end, space, nearClipPlane, cam=None):
+
+    points = [[] for x in objs]
+
+    with utl.IsolateViews():
+
+        #helper locator
+        loc = mc.spaceLocator()[0]
+        mc.parent(loc,parentGrp)
+
+        #frame loop:
+        time = range(int(start),int(end+1))
+        for t in time:
+            mc.currentTime(t, edit=True)
+
+            #object loop
+            for i,obj in enumerate(objs):
+
+                objPnt = mc.xform(obj, query=True, worldSpace=True, rotatePivot=True)
+
+                if space=='camera':
+                    camPnt = mc.xform(cam, query=True, worldSpace=True, rotatePivot=True)
+
+                    objVec = utl.Vector(objPnt[0],objPnt[1],objPnt[2])
+                    camVec = utl.Vector(camPnt[0],camPnt[1],camPnt[2])
+
+                    vec = objVec-camVec
+                    vec.normalize()
+                    #multiply here to offset from camera
+                    vec=vec*nearClipPlane*1.2
+                    vec+=camVec
+
+                    mc.xform(loc, worldSpace=True, translation=vec[:])
+
+                    trans = mc.getAttr(loc+'.translate')
+                    points[i].append(trans[0])
+
+                elif space=='world':
+                    points[i].append(objPnt)
+
+        mc.delete(loc)
+    return points
+
+
 def retraceArc(*args):
     '''
     Reads the global variables to trace the previous selection and settings.
@@ -469,6 +537,24 @@ def applyBrush(curve, parent):
 
     return stroke
 
+
+def markingMenu():
+    '''
+    Example of how a marking menu could be set up.
+    '''
+
+    menuKwargs = {'enable':True,
+                  'subMenu':False,
+                  'enableCommandRepeat':True,
+                  'optionBox':False,
+                  'boldFont':True}
+
+    mc.menuItem(radialPosition='N', label='Trace Camera', command=traceCamera, **menuKwargs)
+    mc.menuItem(radialPosition='E', label='Trace World', command=traceWorld, **menuKwargs)
+    mc.menuItem(radialPosition='W', label='Re-Trace', command=retraceArc, **menuKwargs)
+    mc.menuItem(radialPosition='S', label='Clear', command=clearArcs, **menuKwargs)
+
+
 if __name__ == '__main__':ui()
 
 #      ______________________
@@ -487,3 +573,5 @@ if __name__ == '__main__':ui()
 # Revision 6: 2017-06-30 : Fixing bug with moving cameras, adding line width
 #
 # Revision 7: 2018-02-17 : Updating license to MIT.
+#
+# Revision 8: 2018-04-09 : Test for accuracy to determine whether the fast solution is accurate.
