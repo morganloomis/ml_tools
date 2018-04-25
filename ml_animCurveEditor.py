@@ -1,8 +1,8 @@
 # -= ml_animCurveEditor.py =-
 #                __   by Morgan Loomis
 #     ____ ___  / /  http://morganloomis.com
-#    / __ `__ \/ /  Revision 4
-#   / / / / / / /  2018-02-17
+#    / __ `__ \/ /  Revision 5
+#   / / / / / / /  2018-04-25
 #  /_/ /_/ /_/_/  _________
 #               /_________/
 # 
@@ -72,7 +72,7 @@
 __author__ = 'Morgan Loomis'
 __license__ = 'MIT'
 __category__ = 'None'
-__revision__ = 4
+__revision__ = 5
 
 
 import maya.cmds as mc
@@ -443,6 +443,17 @@ def cutUnselected(selectionOption=1, setKey=True):
     keySel.cutKey(time=(str(end)+':',))
 
 
+def cutFrame(selectionOption=1):
+
+    keySel = _getKeySelection(selectionOption)
+
+    frame = mc.currentTime(query=True)
+    keySel.cutKey(time=(frame,frame), includeSubFrames=True)
+
+    #move everything after the cut
+    keySel.keyframe(edit=True, time=(str(frame)+':',), relative=True, timeChange=-1)
+
+
 def rippleCut(selectionOption=1, setKey=True):
 
     keySel = _getKeySelection(selectionOption)
@@ -537,3 +548,5 @@ if __name__ == '__main__': ui()
 # Revision 3: 2017-12-03 : Adding "Insert Frame"
 #
 # Revision 4: 2018-02-17 : Updating license to MIT.
+#
+# Revision 5: 2018-04-25 : UI bug fix, adding cutKey.
