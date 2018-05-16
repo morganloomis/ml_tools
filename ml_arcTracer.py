@@ -1,8 +1,8 @@
 # -= ml_arcTracer.py =-
 #                __   by Morgan Loomis
 #     ____ ___  / /  http://morganloomis.com
-#    / __ `__ \/ /  Revision 8
-#   / / / / / / /  2018-04-09
+#    / __ `__ \/ /  Revision 11
+#   / / / / / / /  2018-05-13
 #  /_/ /_/ /_/_/  _________
 #               /_________/
 # 
@@ -80,8 +80,15 @@
 
 __author__ = 'Morgan Loomis'
 __license__ = 'MIT'
-__category__ = 'None'
-__revision__ = 8
+__revision__ = 11
+__category__ = 'animation'
+
+shelfButton = {'annotation': 'Open a UI to trace the animation of a node across the screen.',
+               'menuItem': [['Trace Camera','import ml_arcTracer;ml_arcTracer.traceCamera()'],
+                            ['Trace World','import ml_arcTracer;ml_arcTracer.traceWorld()'],
+                            ['Retrace', 'import ml_arcTracer;ml_arcTracer.retraceArc()'],
+                            ['Clear Arcs','import ml_arcTracer;ml_arcTracer.clearArcs()']],
+               'order': 2}
 
 import maya.cmds as mc
 import maya.mel as mm
@@ -100,6 +107,7 @@ except ImportError:
     
     if result == 'Download Module':
         mc.showHelp('http://morganloomis.com/tool/ml_utilities/',absolute=True)
+
 
 def ui():
     '''
@@ -124,6 +132,26 @@ Press clear to delete the arcs, or retrace to redo the last arc.''') as win:
                             shelfLabel='clear', shelfIcon='flowPathObj')
         fsg = mc.floatSliderGrp( label='Line Width', minValue=0.1, maxValue=5, value=globalScale)
         mc.floatSliderGrp(fsg, edit=True, dragCommand=partial(setLineWidthCallback, fsg))
+
+
+def mini():
+    name = 'ml_arcTracer_win_mini'
+    w = 100
+    h = 50
+    if mc.window(name, exists=True):
+        mc.deleteUI(name)
+    win = mc.window(name, width=w, height=h, title='arcs', iconName='arc')
+    form = mc.formLayout()
+
+    a1 = mc.button(label='camera', command=traceCamera)
+    a2 = mc.button(label='world', command=traceWorld)
+    b1 = mc.button(label='retrace', command=retraceArc)
+    b2 = mc.button(label='clear', command=clearArcs)
+
+    utl.formLayoutGrid(form, [[a1,a2],[b1,b2]], )
+
+    mc.showWindow(win)
+    mc.window(win, edit=True, width=w, height=h)
 
 
 def setLineWidthCallback(slider, *args):
@@ -156,9 +184,6 @@ def getWorldValueAtFrame(attr, frame):
     context = OpenMaya.MDGContext(OpenMaya.MTime(frame))
     return plug.asDouble(context)
 
-def getWorldValueAtFrameAccurate(attr, frame):
-    mc.currentTime(frame)
-    return mc.getAttr(attr)
 
 def traceArc(space='camera'):
     '''
@@ -554,6 +579,8 @@ def markingMenu():
     mc.menuItem(radialPosition='W', label='Re-Trace', command=retraceArc, **menuKwargs)
     mc.menuItem(radialPosition='S', label='Clear', command=clearArcs, **menuKwargs)
 
+    mc.menuItem(label='Arc Tracer UI', command=ui, **menuKwargs)
+
 
 if __name__ == '__main__':ui()
 
@@ -575,3 +602,9 @@ if __name__ == '__main__':ui()
 # Revision 7: 2018-02-17 : Updating license to MIT.
 #
 # Revision 8: 2018-04-09 : Test for accuracy to determine whether the fast solution is accurate.
+#
+# Revision 9: 2018-05-05 : Adding shelf support.
+#
+# Revision 10: 2018-05-06 : Added marking menu.
+#
+# Revision 11: 2018-05-13 : shelf support

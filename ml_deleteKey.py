@@ -1,8 +1,8 @@
 # -= ml_deleteKey.py =-
 #                __   by Morgan Loomis
 #     ____ ___  / /  http://morganloomis.com
-#    / __ `__ \/ /  Revision 8
-#   / / / / / / /  2018-02-17
+#    / __ `__ \/ /  Revision 9
+#   / / / / / / /  2018-05-13
 #  /_/ /_/ /_/_/  _________
 #               /_________/
 # 
@@ -80,9 +80,18 @@
 
 __author__ = 'Morgan Loomis'
 __license__ = 'MIT'
-__category__ = 'None'
-__revision__ = 8
+__revision__ = 9
+__category__ = 'animation'
 
+hotkey = {'d':'deleteKey(selectedKeys=True, deleteSubFrames=True, visibleInGraphEditor=True)'}
+
+shelfButton = {'annotation': 'Click to delete selected keys, double click to delete selected channels. Right click for more options.',
+               'command': 'import ml_deleteKey;ml_deleteKey.deleteKey(deleteSubFrames=True, visibleInGraphEditor=True, selectedKeys=True)',
+               'doubleClickCommand': 'import ml_deleteKey;ml_deleteKey.deleteChannels()',
+               'imageOverlayLabel': 'del',
+               'menuItem': [['Delete Key UI', 'import ml_deleteKey;ml_deleteKey.ui()'],
+                            ['Delete Selected Channels', 'import ml_deleteKey;ml_deleteKey.deleteChannels()']],
+               'order': 6}
 
 import maya.cmds as mc
 import maya.mel as mm
@@ -99,8 +108,6 @@ except ImportError:
     
     if result == 'Download Module':
         mc.showHelp('http://morganloomis.com/tool/ml_utilities/',absolute=True)
-
-hotkey = {'d':'deleteKey(selectedKeys=True, deleteSubFrames=True, visibleInGraphEditor=True)'}
 
 
 def ui():
@@ -201,3 +208,5 @@ if __name__ == '__main__': ui()
 # Revision 7: 2014-03-01 : adding category
 #
 # Revision 8: 2018-02-17 : Updating license to MIT.
+#
+# Revision 9: 2018-05-13 : shelf support

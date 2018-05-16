@@ -1,8 +1,8 @@
 # -= ml_breakdown.py =-
 #                __   by Morgan Loomis
 #     ____ ___  / /  http://morganloomis.com
-#    / __ `__ \/ /  Revision 3
-#   / / / / / / /  2018-02-17
+#    / __ `__ \/ /  Revision 4
+#   / / / / / / /  2018-05-13
 #  /_/ /_/ /_/_/  _________
 #               /_________/
 # 
@@ -84,8 +84,18 @@
 
 __author__ = 'Morgan Loomis'
 __license__ = 'MIT'
-__category__ = 'None'
-__revision__ = 3
+__revision__ = 4
+__category__ = 'animation'
+
+shelfButton = {'annotation': 'Click to weight keys by dragging, double click to open UI.',
+               'command': 'import ml_breakdown;ml_breakdown.drag()',
+               'doubleClickCommand': 'import ml_breakdown;ml_breakdown.ui()',
+               'imageOverlayLabel': 'BD',
+               'menuItem': [['Breakdown UI', 'import ml_breakdown;ml_breakdown.ui()'],
+                            ['<< Previous', 'import ml_breakdown;ml_breakdown.weightPrevious()'],
+                            ['>> Next', 'import ml_breakdown;ml_breakdown.weightNext()'],
+                            ['Average', 'import ml_breakdown;ml_breakdown.weightAverage()']],
+               'order': 12}
 
 import maya.cmds as mc
 from maya import OpenMaya
@@ -343,3 +353,5 @@ if __name__ == '__main__':
 # Revision 2: 2015-05-13 : Documentation updates.
 #
 # Revision 3: 2018-02-17 : Updating license to MIT.
+#
+# Revision 4: 2018-05-13 : shelf support

@@ -1,8 +1,8 @@
 # -= ml_tangentWeight.py =-
 #                __   by Morgan Loomis
 #     ____ ___  / /  http://morganloomis.com
-#    / __ `__ \/ /  Revision 4
-#   / / / / / / /  2018-02-17
+#    / __ `__ \/ /  Revision 5
+#   / / / / / / /  2018-05-14
 #  /_/ /_/ /_/_/  _________
 #               /_________/
 # 
@@ -75,8 +75,13 @@
 
 __author__ = 'Morgan Loomis'
 __license__ = 'MIT'
-__category__ = 'None'
-__revision__ = 4
+__revision__ = 5
+__category__ = 'animation'
+
+shelfButton = {'annotation': 'Open a UI for setting keyframe tangent weight.',
+               'menuItem': [['+ Plus', 'import ml_tangentWeight;ml_tangentWeight.plus()'],
+                            ['- Minus', 'import ml_tangentWeight;ml_tangentWeight.minus()']],
+               'order': 14}
 
 import maya.cmds as mc
 from maya import OpenMaya
@@ -206,3 +211,5 @@ if __name__ == '__main__':ui()
 # Revision 3: 2016-05-01 : fixed error when nothing is selected.
 #
 # Revision 4: 2018-02-17 : Updating license to MIT.
+#
+# Revision 5: 2018-05-14 : Shelf support.

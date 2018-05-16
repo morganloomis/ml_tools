@@ -1,8 +1,8 @@
 # -= ml_setKey.py =-
 #                __   by Morgan Loomis
 #     ____ ___  / /  http://morganloomis.com
-#    / __ `__ \/ /  Revision 10
-#   / / / / / / /  2018-02-17
+#    / __ `__ \/ /  Revision 11
+#   / / / / / / /  2018-05-13
 #  /_/ /_/ /_/_/  _________
 #               /_________/
 # 
@@ -76,8 +76,8 @@
 
 __author__ = 'Morgan Loomis'
 __license__ = 'MIT'
-__category__ = 'None'
-__revision__ = 10
+__revision__ = 11
+__category__ = 'animation'
 
 import maya.cmds as mc
 import maya.mel as mm
@@ -97,6 +97,12 @@ except ImportError:
 
 hotkey = {'S':'setKey(deleteSubFrames=True, insert=True, selectedChannels=True, visibleInGraphEditor=True, keyKeyed=True, keyShapes=True)'}
 
+shelfButton = {'annotation': 'Open a UI to set keyframes with options.',
+               'command': 'import ml_setKey;ml_setKey.setKey(insert=True, deleteSubFrames=True, visibleInGraphEditor=True, keyShapes=False, selectedChannels=True, keyKeyed=True)',
+               'doubleClickCommand': 'import ml_setKey;ml_setKey.setKey(insert=True, deleteSubFrames=True, keyShapes=False, selectedChannels=True)',
+               'imageOverlayLabel': 'set',
+               'menuItem': [['Set Key UI', 'import ml_setKey;ml_setKey.ui()']],
+               'order': 5}
 
 def ui():
     '''
@@ -170,6 +176,8 @@ def setKey(deleteSubFrames=False, insert=False, selectedChannels=False, visibleI
     keySel.setKeyframe(insert=insert, shape=keyShapes, deleteSubFrames=deleteSubFrames)
 
 
+
+
 if __name__ == '__main__': ui()
 
 #      ______________________
@@ -188,3 +196,5 @@ if __name__ == '__main__': ui()
 # Revision 9: 2014-03-01 : adding category
 #
 # Revision 10: 2018-02-17 : Updating license to MIT.
+#
+# Revision 11: 2018-05-13 : shelf support

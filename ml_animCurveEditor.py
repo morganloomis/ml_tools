@@ -1,8 +1,8 @@
 # -= ml_animCurveEditor.py =-
 #                __   by Morgan Loomis
 #     ____ ___  / /  http://morganloomis.com
-#    / __ `__ \/ /  Revision 5
-#   / / / / / / /  2018-04-25
+#    / __ `__ \/ /  Revision 6
+#   / / / / / / /  2018-05-14
 #  /_/ /_/ /_/_/  _________
 #               /_________/
 # 
@@ -71,9 +71,12 @@
 
 __author__ = 'Morgan Loomis'
 __license__ = 'MIT'
-__category__ = 'None'
-__revision__ = 5
+__revision__ = 6
+__category__ = 'animation'
 
+shelfButton = {'annotation': 'Open an UI to edit animation curves in bulk.',
+               'imageOverlayLabel': 'edit',
+               'order': 3}
 
 import maya.cmds as mc
 from maya import OpenMaya
@@ -316,8 +319,6 @@ change tabs to choose options related to that function.''') as win:
 
 def _getKeySelection(selectionOption):
 
-    selectedPreset = mc.optionMenuGrp('ml_animCurveEditor_selection_menu', query=True, select=True)
-
     keySel = utl.KeySelection()
 
     if selectionOption == 1:
@@ -550,3 +551,5 @@ if __name__ == '__main__': ui()
 # Revision 4: 2018-02-17 : Updating license to MIT.
 #
 # Revision 5: 2018-04-25 : UI bug fix, adding cutKey.
+#
+# Revision 6: 2018-05-14 : Shelf support.

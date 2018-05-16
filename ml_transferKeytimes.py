@@ -1,8 +1,8 @@
 # -= ml_transferKeytimes.py =-
 #                __   by Morgan Loomis
 #     ____ ___  / /  http://morganloomis.com
-#    / __ `__ \/ /  Revision 2
-#   / / / / / / /  2018-02-17
+#    / __ `__ \/ /  Revision 3
+#   / / / / / / /  2018-05-13
 #  /_/ /_/ /_/_/  _________
 #               /_________/
 # 
@@ -65,8 +65,12 @@
 
 __author__ = 'Morgan Loomis'
 __license__ = 'MIT'
-__category__ = 'None'
-__revision__ = 2
+__revision__ = 3
+__category__ = 'animation'
+
+shelfButton = {'annotation': 'Select two nodes to transfer the keytimes from the first to the second.',
+               'imageOverlayLabel': 'xfer',
+               'order': 9}
 
 import maya.cmds as mc
 from maya import OpenMaya
@@ -145,3 +149,5 @@ if __name__ == '__main__': main()
 # Revision 1: 2014-03-02 : First publish.
 #
 # Revision 2: 2018-02-17 : Updating license to MIT.
+#
+# Revision 3: 2018-05-13 : shelf support

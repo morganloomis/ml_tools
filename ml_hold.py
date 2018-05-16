@@ -1,8 +1,8 @@
 # -= ml_hold.py =-
 #                __   by Morgan Loomis
 #     ____ ___  / /  http://morganloomis.com
-#    / __ `__ \/ /  Revision 7
-#   / / / / / / /  2018-02-17
+#    / __ `__ \/ /  Revision 8
+#   / / / / / / /  2018-05-13
 #  /_/ /_/ /_/_/  _________
 #               /_________/
 # 
@@ -85,8 +85,16 @@
 
 __author__ = 'Morgan Loomis'
 __license__ = 'MIT'
-__category__ = 'None'
-__revision__ = 7
+__revision__ = 8
+__category__ = 'animation'
+
+shelfButton = {'annotation': 'Open a UI to create holds.',
+               'imageOverlayLabel': 'hold',
+               'menuItem': [['Hold Current', 'import ml_hold;ml_hold.current()'],
+                            ['Hold Average', 'import ml_hold;ml_hold.average()'],
+                            ['<< Previous', 'import ml_hold;ml_hold.previous()'],
+                            ['>> Next', 'import ml_hold;ml_hold.next()']],
+               'order': 11}
 
 import maya.cmds as mc
 import maya.mel as mm
@@ -312,3 +320,5 @@ if __name__ == '__main__':
 # Revision 6: 2015-01-10 : Fixed bug relating to KeySelection
 #
 # Revision 7: 2018-02-17 : Updating license to MIT.
+#
+# Revision 8: 2018-05-13 : shelf support

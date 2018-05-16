@@ -1,8 +1,8 @@
 # -= ml_selectKeyed.py =-
 #                __   by Morgan Loomis
 #     ____ ___  / /  http://morganloomis.com
-#    / __ `__ \/ /  Revision 6
-#   / / / / / / /  2018-02-17
+#    / __ `__ \/ /  Revision 7
+#   / / / / / / /  2018-05-13
 #  /_/ /_/ /_/_/  _________
 #               /_________/
 # 
@@ -67,8 +67,11 @@
 
 __author__ = 'Morgan Loomis'
 __license__ = 'MIT'
-__category__ = 'None'
-__revision__ = 6
+__revision__ = 7
+__category__ = 'animation'
+
+shelfButton = {'annotation': 'Select all keyed nodes within a namespace or hierarchy.',
+               'order': 7}
 
 import maya.cmds as mc
 
@@ -109,3 +112,5 @@ if __name__ == '__main__': main()
 # Revision 5: 2014-03-01 : adding category
 #
 # Revision 6: 2018-02-17 : Updating license to MIT.
+#
+# Revision 7: 2018-05-13 : shelf support

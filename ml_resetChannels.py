@@ -1,8 +1,8 @@
 # -= ml_resetChannels.py =-
 #                __   by Morgan Loomis
 #     ____ ___  / /  http://morganloomis.com
-#    / __ `__ \/ /  Revision 10
-#   / / / / / / /  2018-02-17
+#    / __ `__ \/ /  Revision 11
+#   / / / / / / /  2018-05-13
 #  /_/ /_/ /_/_/  _________
 #               /_________/
 # 
@@ -68,8 +68,14 @@
 
 __author__ = 'Morgan Loomis'
 __license__ = 'MIT'
-__category__ = 'None'
-__revision__ = 10
+__revision__ = 11
+__category__ = 'animation'
+
+shelfButton = {'annotation': 'Reset the selected nodes or channels to their default values.',
+               'command': 'import ml_resetChannels;ml_resetChannels.resetPuppetControl()',
+               'imageOverlayLabel': 'reset',
+               'menuItem': [['Reset Transforms Only','import ml_resetChannels;ml_resetChannels.main(transformsOnly=True)']],
+               'order': 4}
 
 import maya.cmds as mc
 import maya.mel as mm
@@ -146,3 +152,5 @@ if __name__ == '__main__':
 # Revision 9: 2015-05-16 : argument update in order to be supported in puppet context menu.
 #
 # Revision 10: 2018-02-17 : Updating license to MIT.
+#
+# Revision 11: 2018-05-13 : shelf support

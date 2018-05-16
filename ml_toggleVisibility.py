@@ -1,8 +1,8 @@
 # -= ml_toggleVisibility.py =-
 #                __   by Morgan Loomis
 #     ____ ___  / /  http://morganloomis.com
-#    / __ `__ \/ /  Revision 3
-#   / / / / / / /  2018-02-17
+#    / __ `__ \/ /  Revision 4
+#   / / / / / / /  2018-05-12
 #  /_/ /_/ /_/_/  _________
 #               /_________/
 # 
@@ -59,8 +59,11 @@
 
 __author__ = 'Morgan Loomis'
 __license__ = 'MIT'
-__category__ = 'None'
-__revision__ = 3
+__revision__ = 4
+__category__ = 'animation'
+
+shelfButton = {'annotation': 'Toggle the visible state of selected nodes. Force if possible.',
+               'order': 1}
 
 import maya.cmds as mc
 
@@ -97,3 +100,5 @@ if __name__ == '__main__':
 # Revision 1: 2015-05-14 : Converted from mel.
 #
 # Revision 3: 2018-02-17 : Updating license to MIT.
+#
+# Revision 4: 2018-05-12 : Shelf support

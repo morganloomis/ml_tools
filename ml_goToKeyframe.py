@@ -1,8 +1,8 @@
 # -= ml_goToKeyframe.py =-
 #                __   by Morgan Loomis
 #     ____ ___  / /  http://morganloomis.com
-#    / __ `__ \/ /  Revision 4
-#   / / / / / / /  2018-02-17
+#    / __ `__ \/ /  Revision 5
+#   / / / / / / /  2018-05-13
 #  /_/ /_/ /_/_/  _________
 #               /_________/
 # 
@@ -69,9 +69,11 @@
 
 __author__ = 'Morgan Loomis'
 __license__ = 'MIT'
-__category__ = 'None'
-__revision__ = 4
+__revision__ = 5
+__category__ = 'animation'
 
+shelfButton = {'annotation': 'Open a UI to change time based on keyframes and selection.',
+               'order': 10}
 
 import maya.cmds as mc
 from maya import OpenMaya
@@ -225,3 +227,5 @@ if __name__ == '__main__':
 # Revision 3: 2014-03-01 : adding category.
 #
 # Revision 4: 2018-02-17 : Updating license to MIT.
+#
+# Revision 5: 2018-05-13 : shelf support

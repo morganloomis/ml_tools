@@ -1,8 +1,8 @@
 # -= ml_copyAnim.py =-
 #                __   by Morgan Loomis
 #     ____ ___  / /  http://morganloomis.com
-#    / __ `__ \/ /  Revision 6
-#   / / / / / / /  2018-02-17
+#    / __ `__ \/ /  Revision 8
+#   / / / / / / /  2018-05-13
 #  /_/ /_/ /_/_/  _________
 #               /_________/
 # 
@@ -60,7 +60,7 @@
 # - -/__ Ui __/- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - 
 # 
 # [] Copy To New Layer : Create a new animation layer to copy the curves into, preserving the original animation.
-# [Copy Single] : Copy animation from one object to another.
+# [Copy Single] : Copy animation from one object to another (or multiple).
 # [Copy Hierarchy] : Uses name matching to copy animation across hierarchies.
 # 
 #     ___________________
@@ -74,8 +74,13 @@
 
 __author__ = 'Morgan Loomis'
 __license__ = 'MIT'
-__category__ = 'None'
-__revision__ = 6
+__revision__ = 8
+__category__ = 'animation'
+
+shelfButton = {'annotation': 'Open a UI to copy animation from one node or hierarchy to another.',
+               'menuItem': [['Copy Single', 'import ml_copyAnim;ml_copyAnim.copySingle()'],
+                            ['Copy Hierarchy', 'import ml_copyAnim;ml_copyAnim.copyHierarchy()']],
+               'order': 8}
 
 import maya.cmds as mc
 import maya.mel as mm
@@ -99,10 +104,11 @@ def ui():
     '''
 
     with utl.MlUi('ml_copyAnim', 'Copy Animation', width=400, height=120, info='''Copy animation across single nodes, or hierarchies based on name.
+You can copy to multiple destinations at once using Copy Single.
 Highlight the timeline to copy just that part of the animation.''') as win:
 
         mc.checkBoxGrp('ml_copyAnim_layer_checkBox', label='Copy To New Layer', annotation='Create a new animation layer to copy the curves into, preserving the original animation.')
-        win.ButtonWithPopup(label='Copy Single', command=copySingle, annotation='Copy animation from one object to another.', shelfLabel='cpAn', shelfIcon='defaultTwoStackedLayout',
+        win.ButtonWithPopup(label='Copy Single', command=copySingle, annotation='Copy animation from one object to another (or multiple).', shelfLabel='cpAn', shelfIcon='defaultTwoStackedLayout',
                             readUI_toArgs={'addToLayer':'ml_copyAnim_layer_checkBox'})
         win.ButtonWithPopup(label='Copy Hierarchy', command=copyHierarchy, annotation='Uses name matching to copy animation across hierarchies.', shelfLabel='cpAn', shelfIcon='defaultTwoStackedLayout',
                             readUI_toArgs={'addToLayer':'ml_copyAnim_layer_checkBox'})
@@ -129,12 +135,12 @@ def copySingle(source=None, destination=None, pasteMethod='replace', offset=0, a
 
     if not source and not destination:
         sel = mc.ls(sl=True)
-        if len(sel) != 2:
-            OpenMaya.MGlobal.displayWarning('Please select exactly 2 objects.')
+        if len(sel) < 2:
+            OpenMaya.MGlobal.displayWarning('Please select 2 or more objects.')
             return
 
         source = sel[0]
-        destination = sel[1]
+        destination = sel[1:]
 
     layer = None
     if addToLayer:
@@ -220,25 +226,31 @@ def copyAnimation(source=None, destination=None, pasteMethod='replace', offset=0
     set a temporary key before copying, and delete it afterward.
     '''
 
+    if not isinstance(destination, (list, tuple)):
+        destination = [destination]
+
     if layer:
         mc.select(destination)
         mc.animLayer(layer, edit=True, addSelectedObjects=True)
 
         #we want to make sure rotation values are within 360 degrees, so we don't get flipping when blending layers.
         utl.minimizeRotationCurves(source)
-        utl.minimizeRotationCurves(destination)
+        for each in destination:
+            utl.minimizeRotationCurves(each)
 
     if rotateOrder:
-        try:
-            if mc.getAttr(destination+'.rotateOrder', keyable=True):
-                mc.setAttr(destination+'.rotateOrder', mc.getAttr(source+'.rotateOrder'))
-        except:pass
+        for each in destination:
+            if mc.getAttr(each+'.rotateOrder', keyable=True):
+                try:
+                    mc.setAttr(each+'.rotateOrder', mc.getAttr(source+'.rotateOrder'))
+                except:pass
 
     if pasteMethod=='replaceCompletely' or not start or not end:
         mc.copyKey(source)
         if layer:
             mc.animLayer(layer, edit=True, selected=True)
-        mc.pasteKey(destination, option=pasteMethod, timeOffset=offset)
+        for each in destination:
+            mc.pasteKey(each, option=pasteMethod, timeOffset=offset)
     else:
 
         #need to do this per animation curve, unfortunately, to make sure we're not adding or removing too many keys
@@ -269,13 +281,31 @@ def copyAnimation(source=None, destination=None, pasteMethod='replace', offset=0
             for each in mc.ls(type='animLayer'):
                 mc.animLayer(each, edit=True, selected=False, preferred=False)
             mc.animLayer(layer, edit=True, selected=True, preferred=True)
-        mc.pasteKey(destination, option=pasteMethod, time=(start,end), copies=1, connect=0, timeOffset=offset)
+        for each in destination:
+            mc.pasteKey(each, option=pasteMethod, time=(start,end), copies=1, connect=0, timeOffset=offset)
 
         #if we set temporary source keys, delete them now
         if cutStart:
             mc.cutKey(cutStart, time=(start,))
         if cutEnd:
             mc.cutKey(cutEnd, time=(end,))
+
+
+def markingMenu():
+    '''
+    Example of how a marking menu could be set up.
+    '''
+
+    menuKwargs = {'enable':True,
+                  'subMenu':False,
+                  'enableCommandRepeat':True,
+                  'optionBox':False,
+                  'boldFont':True}
+
+    mc.menuItem(radialPosition='E', label='Copy Hierarchy', command=copyHierarchy, **menuKwargs)
+    mc.menuItem(radialPosition='W', label='Copy Single', command=copySingle, **menuKwargs)
+
+    mc.menuItem(label='Copy Anim UI', command=ui, **menuKwargs)
 
 
 if __name__ == '__main__': ui()
@@ -295,3 +325,7 @@ if __name__ == '__main__': ui()
 # Revision 5: 2017-07-19 : support for non-namespaced hierarchies, transferring rotateOrder.
 #
 # Revision 6: 2018-02-17 : Updating license to MIT.
+#
+# Revision 7: 2018-05-06 : Copy to multiple, shelf support.
+#
+# Revision 8: 2018-05-13 : shelf support
