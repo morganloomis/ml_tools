@@ -1,8 +1,8 @@
 # -= ml_resetChannels.py =-
 #                __   by Morgan Loomis
 #     ____ ___  / /  http://morganloomis.com
-#    / __ `__ \/ /  Revision 11
-#   / / / / / / /  2018-05-13
+#    / __ `__ \/ /  Revision 12
+#   / / / / / / /  2018-06-04
 #  /_/ /_/ /_/_/  _________
 #               /_________/
 # 
@@ -68,7 +68,7 @@
 
 __author__ = 'Morgan Loomis'
 __license__ = 'MIT'
-__revision__ = 11
+__revision__ = 12
 __category__ = 'animation'
 
 shelfButton = {'annotation': 'Reset the selected nodes or channels to their default values.',
@@ -116,7 +116,7 @@ def main(selectedChannels=True, transformsOnly=False, excludeChannels=None):
         attrs = chans
         if not chans:
             attrs = mc.listAttr(obj, keyable=True, unlocked=True)
-            if excludeChannels:
+            if excludeChannels and attrs:
                 attrs = [x for x in attrs if x not in excludeChannels]
         if transformsOnly:
             attrs = [x for x in attrs if x in testList]
@@ -154,3 +154,5 @@ if __name__ == '__main__':
 # Revision 10: 2018-02-17 : Updating license to MIT.
 #
 # Revision 11: 2018-05-13 : shelf support
+#
+# Revision 12: 2018-06-04 : bug fix for nodes with no keyable channels
