@@ -1102,7 +1102,7 @@ class KeySelection(object):
         if args:
             print ''
             print "Because of an update to ml_utilities, the tool you're trying to run is deprecated and needs to be updated as well."
-            print "Please visit http://morganloomis.com/downloads and download the latest version of this tool."
+            print "Please visit http://morganloomis.com/tools and download the latest version of this tool."
             OpenMaya.MGlobal.displayError('Tool out of date. See script editor for details.')
             return
 
