@@ -1,8 +1,8 @@
 # -= ml_copyAnim.py =-
 #                __   by Morgan Loomis
 #     ____ ___  / /  http://morganloomis.com
-#    / __ `__ \/ /  Revision 8
-#   / / / / / / /  2018-05-13
+#    / __ `__ \/ /  Revision 9
+#   / / / / / / /  2018-06-27
 #  /_/ /_/ /_/_/  _________
 #               /_________/
 # 
@@ -74,7 +74,7 @@
 
 __author__ = 'Morgan Loomis'
 __license__ = 'MIT'
-__revision__ = 8
+__revision__ = 9
 __category__ = 'animation'
 
 shelfButton = {'annotation': 'Open a UI to copy animation from one node or hierarchy to another.',
@@ -240,10 +240,10 @@ def copyAnimation(source=None, destination=None, pasteMethod='replace', offset=0
 
     if rotateOrder:
         for each in destination:
-            if mc.getAttr(each+'.rotateOrder', keyable=True):
-                try:
+            try:
+                if mc.getAttr(each+'.rotateOrder', keyable=True):
                     mc.setAttr(each+'.rotateOrder', mc.getAttr(source+'.rotateOrder'))
-                except:pass
+            except:pass
 
     if pasteMethod=='replaceCompletely' or not start or not end:
         mc.copyKey(source)
@@ -329,3 +329,5 @@ if __name__ == '__main__': ui()
 # Revision 7: 2018-05-06 : Copy to multiple, shelf support.
 #
 # Revision 8: 2018-05-13 : shelf support
+#
+# Revision 9: 2018-06-27 : bug fix for rotateOrder

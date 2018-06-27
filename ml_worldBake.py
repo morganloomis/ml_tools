@@ -1,8 +1,8 @@
 # -= ml_worldBake.py =-
 #                __   by Morgan Loomis
 #     ____ ___  / /  http://morganloomis.com
-#    / __ `__ \/ /  Revision 13
-#   / / / / / / /  2018-02-17
+#    / __ `__ \/ /  Revision 14
+#   / / / / / / /  2018-06-27
 #  /_/ /_/ /_/_/  _________
 #               /_________/
 # 
@@ -61,6 +61,8 @@
 # 
 # [Bake Selection To Locators] : Bake selected object to locators specified space.
 # [Bake Selected Locators Back To Objects] : Bake from selected locators back to their source objects.
+# [Re-Parent Animated] : Parent all selected nodes to the last selection.
+# [Un-Parent Animated] : Parent all selected to world.
 # [Bake Selected] : Bake from the first selected object directly to the second.
 # [Bake Selected With Offset] : Bake from the first selected object directly to the second, maintaining offset.
 # 
@@ -75,8 +77,8 @@
 
 __author__ = 'Morgan Loomis'
 __license__ = 'MIT'
-__category__ = 'None'
-__revision__ = 13
+__revision__ = 14
+__category__ = 'animation'
 
 import maya.cmds as mc
 from maya import OpenMaya
@@ -126,11 +128,18 @@ and bake "from locators" to re-apply your animation.''') as win:
         mc.setParent('..')
 
         tab3 = mc.columnLayout(adj=True)
+        win.ButtonWithPopup(label='Re-Parent Animated', command=reparent, annotation='Parent all selected nodes to the last selection.',
+            readUI_toArgs={'bakeOnOnes':'ml_worldBake_bakeOnOnes_checkBox'}, name=win.name)
+        win.ButtonWithPopup(label='Un-Parent Animated', command=unparent, annotation='Parent all selected to world.',
+            readUI_toArgs={'bakeOnOnes':'ml_worldBake_bakeOnOnes_checkBox'}, name=win.name)
+
+        mc.separator()
+
         mc.checkBoxGrp('ml_worldBake_maintainOffset_checkBox',label='Maintain Offset',
                        annotation='Maintain the offset between nodes, rather than snapping.')
         win.ButtonWithPopup(label='Bake Selected', command=utl.matchBake, annotation='Bake from the first selected object directly to the second.',
             readUI_toArgs={'bakeOnOnes':'ml_worldBake_bakeOnOnes_checkBox',
-                           'maintainOffset':'ml_worldBake_maintainOffset_checkBox'}, name=win.name)#this last arg is temp..
+                           'maintainOffset':'ml_worldBake_maintainOffset_checkBox'}, name=win.name)
 
         mc.tabLayout( tabs, edit=True, tabLabel=((tab1, 'Bake To Locators'), (tab2, 'Bake From Locators'), (tab3, 'Bake Selection')) )
 #        win.ButtonWithPopup(label='Bake Selected With Offset', command=matchBake, annotation='Bake from the first selected object directly to the second, maintaining offset.',
@@ -254,6 +263,82 @@ def matchBakeLocators(parent=None, bakeOnOnes=False, constrainSource=False):
         for loc, obj in zip(locs, objs):
             mc.parentConstraint(loc, obj)
 
+def reparent(bakeOnOnes=False):
+
+    objs = mc.ls(sl=True)
+    if not objs or len(objs) < 2:
+        OpenMaya.MGlobal.displayWarning('Select one or more nodes, followed by the new parent.')
+        return
+    parentBake(objs[:-1], objs[-1], bakeOnOnes=bakeOnOnes)
+
+
+def unparent(bakeOnOnes=False):
+
+    objs = mc.ls(sl=True)
+    if not objs:
+        OpenMaya.MGlobal.displayWarning('Select one or more nodes to unparent.')
+        return
+    parentBake(objs, bakeOnOnes=bakeOnOnes)
+
+
+def parentBake(objs, parent=None, bakeOnOnes=False):
+
+    #check objects can be parented
+    parentReferenced = mc.referenceQuery(parent, isNodeReferenced=True) if parent else False
+
+    culledObjs = []
+    for each in objs:
+        eachParent = mc.listRelatives(each, parent=True)
+        if mc.referenceQuery(each, isNodeReferenced=True):
+            if parentReferenced:
+                OpenMaya.MGlobal.displayWarning("Child and parent are both referenced, skipping: {} > {}".format(each, parent))
+                continue
+            if eachParent and mc.referenceQuery(eachParent[0], isNodeReferenced=True):
+                OpenMaya.MGlobal.displayWarning("Node is referenced and can't be reparented, skipping: {}".format(each))
+                continue
+        if not parent and not eachParent:
+            OpenMaya.MGlobal.displayWarning("Node is already child of the world, skipping: {}".format(each))
+            continue
+        culledObjs.append(each)
+
+    if not culledObjs:
+        OpenMaya.MGlobal.displayWarning("No nodes could be reparented.")
+        return
+
+    source = []
+    destination = []
+    for each in culledObjs:
+        source.append(mc.duplicate(each, parentOnly=True)[0])
+        mc.copyKey(each)
+        mc.pasteKey(source[-1], option='replaceCompletely')
+        try:
+            if parent:
+                destination.append(mc.parent(each, parent)[0])
+            else:
+                destination.append(mc.parent(each, world=True)[0])
+        except RuntimeError as err:
+            mc.delete(source)
+            raise err
+
+    utl.matchBake(source=source, destination=destination, bakeOnOnes=bakeOnOnes)
+
+    mc.delete(source)
+
+
+def markingMenu():
+
+    menuKwargs = {'enable':True,
+                  'subMenu':False,
+                  'enableCommandRepeat':True,
+                  'optionBox':False,
+                  'boldFont':True}
+
+    mc.menuItem(radialPosition='N', label='Bake To Locators', command=matchBakeLocators, **menuKwargs)
+    mc.menuItem(radialPosition='W', label='Bake From Locators', command=fromLocators, **menuKwargs)
+    mc.menuItem(radialPosition='E', label='Re-Parent', command=reparent, **menuKwargs)
+    mc.menuItem(radialPosition='S', label='Un-Parent', command=unparent, **menuKwargs)
+
+    mc.menuItem(label='World Bake UI', command=ui, **menuKwargs)
 
 
 if __name__ == '__main__':
@@ -280,3 +365,5 @@ if __name__ == '__main__':
 # Revision 12: 2015-05-14 : Baking broken out and moved to ml_utilities
 #
 # Revision 13: 2018-02-17 : Updating license to MIT.
+#
+# Revision 14: 2018-06-27 : parenting options and marking menu
