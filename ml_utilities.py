@@ -1,8 +1,8 @@
 # -= ml_utilities.py =-
 #                __   by Morgan Loomis
 #     ____ ___  / /  http://morganloomis.com
-#    / __ `__ \/ /  Revision 32
-#   / / / / / / /  2018-02-17
+#    / __ `__ \/ /  Revision 33
+#   / / / / / / /  2018-07-18
 #  /_/ /_/ /_/_/  _________
 #               /_________/
 # 
@@ -60,8 +60,7 @@
 
 __author__ = 'Morgan Loomis'
 __license__ = 'MIT'
-__category__ = 'None'
-__revision__ = 32
+__revision__ = 33
 
 import maya.cmds as mc
 import maya.mel as mm
@@ -76,15 +75,16 @@ ICON_URL = WEBSITE_URL+'/icons/'
 GITHUB_ROOT_URL = 'https://raw.githubusercontent.com/morganloomis/ml_tools/master/'
 
 #try to add to the iconpath if there is an icons folder in this directory
-icon_path = os.path.join(os.path.dirname(__file__),'icons').replace('\\','/')
-if os.path.isdir(icon_path) and icon_path not in os.environ['XBMLANGPATH']:
-    os.environ['XBMLANGPATH'] = os.pathsep.join((os.environ['XBMLANGPATH'],icon_path))
+THIS_DIR = os.path.dirname(__file__)
+ICON_PATH = os.path.join(THIS_DIR,'icons').replace('\\','/')
+if os.path.isdir(ICON_PATH) and ICON_PATH not in os.environ['XBMLANGPATH']:
+    os.environ['XBMLANGPATH'] = os.pathsep.join((os.environ['XBMLANGPATH'],ICON_PATH))
 
 MAYA_VERSION = mm.eval('getApplicationVersionAsFloat')
 
 def _showHelpCommand(url):
     '''
-    This just returns the maya command for launching a wiki page, since that gets called a few times
+    This just returns the maya command for launching a web page, since that gets called a few times
     '''
     return 'import maya.cmds;maya.cmds.showHelp("'+url+'",absolute=True)'
 
@@ -332,7 +332,7 @@ def formLayoutGrid(form, controls, offset=1):
     Controls should be a list of lists, and this will arrange them in a grid
     '''
 
-    kwargs = {'edit':True, 'attachPosition':list()}
+    kwargs = {'edit':True, 'attachPosition':[]}
     rowInc = 100/len(controls)
     colInc = 100/len(controls[0])
     position = {'left':0,'right':100,'top':0,'bottom':100}
@@ -540,7 +540,7 @@ def getNamespace(node):
 
     if not ':' in node:
         return ''
-    return node.rsplit(':',1)[0] + ':'
+    return node.rsplit('|',1)[-1].rsplit(':',1)[0] + ':'
 
 
 def getRoots(nodes):
@@ -2292,6 +2292,7 @@ class Vector:
                        self.x * other.y - self.y * other.x)
 
 
+
 #      ______________________
 # - -/__ Revision History __/- - - - - - - - - - - - - - - - - - - - - - - -
 #
@@ -2360,3 +2361,5 @@ class Vector:
 # Revision 31: 2017-06-30 : getCamera support for stereo camera
 #
 # Revision 32: 2018-02-17 : Updating license to MIT.
+#
+# Revision 33: 2018-07-18 : getNamespace bug

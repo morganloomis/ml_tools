@@ -1,8 +1,8 @@
 # -= ml_worldBake.py =-
 #                __   by Morgan Loomis
 #     ____ ___  / /  http://morganloomis.com
-#    / __ `__ \/ /  Revision 14
-#   / / / / / / /  2018-06-27
+#    / __ `__ \/ /  Revision 15
+#   / / / / / / /  2018-07-18
 #  /_/ /_/ /_/_/  _________
 #               /_________/
 # 
@@ -77,9 +77,10 @@
 
 __author__ = 'Morgan Loomis'
 __license__ = 'MIT'
-__revision__ = 14
+__revision__ = 15
 __category__ = 'animation'
 
+from functools import partial
 import maya.cmds as mc
 from maya import OpenMaya
 
@@ -324,6 +325,21 @@ def parentBake(objs, parent=None, bakeOnOnes=False):
 
     mc.delete(source)
 
+def mm_matchLocators(*args):
+    matchBakeLocators()
+
+def mm_matchLocatorsOnes(*args):
+    matchBakeLocators(bakeOnOnes=True)
+
+def mm_fromLocators(*args):
+    fromLocators()
+
+def mm_reparent(*args):
+    reparent()
+
+def mm_unparent(*args):
+    unparent()
+
 
 def markingMenu():
 
@@ -333,10 +349,11 @@ def markingMenu():
                   'optionBox':False,
                   'boldFont':True}
 
-    mc.menuItem(radialPosition='N', label='Bake To Locators', command=matchBakeLocators, **menuKwargs)
-    mc.menuItem(radialPosition='W', label='Bake From Locators', command=fromLocators, **menuKwargs)
-    mc.menuItem(radialPosition='E', label='Re-Parent', command=reparent, **menuKwargs)
-    mc.menuItem(radialPosition='S', label='Un-Parent', command=unparent, **menuKwargs)
+    mc.menuItem(radialPosition='N', label='Bake To Locators', command=mm_matchLocators, **menuKwargs)
+    mc.menuItem(radialPosition='NW', label='Bake To Locators (Ones)', command=mm_matchLocatorsOnes, **menuKwargs)
+    mc.menuItem(radialPosition='W', label='Bake From Locators', command=mm_fromLocators, **menuKwargs)
+    mc.menuItem(radialPosition='E', label='Re-Parent', command=mm_reparent, **menuKwargs)
+    mc.menuItem(radialPosition='S', label='Un-Parent', command=mm_unparent, **menuKwargs)
 
     mc.menuItem(label='World Bake UI', command=ui, **menuKwargs)
 
@@ -367,3 +384,5 @@ if __name__ == '__main__':
 # Revision 13: 2018-02-17 : Updating license to MIT.
 #
 # Revision 14: 2018-06-27 : parenting options and marking menu
+#
+# Revision 15: 2018-07-18 : marking menu
