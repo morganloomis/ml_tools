@@ -80,8 +80,8 @@
 
 __author__ = 'Morgan Loomis'
 __license__ = 'MIT'
-__category__ = 'None'
 __revision__ = 2
+__category__ = 'animation'
 
 import sys
 import maya.cmds as mc
