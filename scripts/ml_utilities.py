@@ -1,8 +1,8 @@
 # -= ml_utilities.py =-
 #                __   by Morgan Loomis
 #     ____ ___  / /  http://morganloomis.com
-#    / __ `__ \/ /  Revision 33
-#   / / / / / / /  2018-07-18
+#    / __ `__ \/ /  Revision 34
+#   / / / / / / /  2019-03-07
 #  /_/ /_/ /_/_/  _________
 #               /_________/
 # 
@@ -60,7 +60,7 @@
 
 __author__ = 'Morgan Loomis'
 __license__ = 'MIT'
-__revision__ = 33
+__revision__ = 34
 
 import maya.cmds as mc
 import maya.mel as mm
@@ -72,7 +72,7 @@ import shutil, os, re, sys, math
 WEBSITE_URL = 'http://morganloomis.com'
 TOOL_URL = WEBSITE_URL+'/tool/'
 ICON_URL = WEBSITE_URL+'/icons/'
-GITHUB_ROOT_URL = 'https://raw.githubusercontent.com/morganloomis/ml_tools/master/'
+GITHUB_ROOT_URL = 'https://raw.githubusercontent.com/morganloomis/ml_tools/master/scripts/'
 
 #try to add to the iconpath if there is an icons folder in this directory
 THIS_DIR = os.path.dirname(__file__)
@@ -2363,3 +2363,5 @@ class Vector:
 # Revision 32: 2018-02-17 : Updating license to MIT.
 #
 # Revision 33: 2018-07-18 : getNamespace bug
+#
+# Revision 34: 2019-03-07 : github URL update
