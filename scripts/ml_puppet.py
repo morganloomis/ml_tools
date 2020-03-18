@@ -81,7 +81,7 @@ import math, re, warnings
 
 try:
     import ml_utilities as utl
-    utl.upToDateCheck(32)
+    utl.upToDateCheck(35)
 except ImportError:
     result = mc.confirmDialog( title='Module Not Found', 
                 message='This tool requires the ml_utilities module. Once downloaded you will need to restart Maya.', 
@@ -111,6 +111,7 @@ except ImportError:
 
 
 PUP_ID_PREFIX = 'pupID_'
+CONTROL_ATTR = PUP_ID_PREFIX+'control'
 
 def main():
     initPuppetContextMenu()
@@ -145,6 +146,61 @@ Right click buttons to create hotkeys.''') as win:
                             annotation='Bake selected element from FK to IK and vice versa.')
 
 
+class SpaceSwitchUI(object):
+    
+    win_name = 'spaceSwitchWin'
+    
+    def __init__(self, title='SpaceSwitch', width=400, height=200):
+        
+        
+        sel = mc.ls(sl=True)
+        if not sel:
+            return 
+        
+        spaces = None
+        nodes = []
+        for each in sel:
+            data = getSpaceSwitchData(each)
+            if not data:
+                continue
+            nodes.append(each)
+            theseSpaces = set(data['space']['enumValues'])
+            if not spaces:
+                spaces = theseSpaces
+            else:
+                spaces.intersection(theseSpaces)
+        
+        if not spaces:
+            return
+        
+        self.width = width
+        self.height = height
+        
+        self.close()
+
+        mc.window(self.win_name, title=title, iconName=title, width=self.width, height=self.height, menuBar=True)
+        self.column = mc.columnLayout(adj=True)
+        
+        for space in list(spaces):
+            mc.button(space, command=partial(self.setSpace, nodes, space))
+        
+        self.show()
+        
+        
+    def setSpace(self, nodes, space, *args):
+        switchSpace(nodes=nodes, toSpace=space, switchRange=True, bakeOnOnes=False)
+        self.close()
+        
+    def close(self):
+        if mc.window(self.win_name, exists=True):
+            mc.deleteUI(self.win_name)
+    
+    def show(self):
+        mc.showWindow(self.win_name)
+        mc.window(self.win_name, edit=True, width=self.width, height=self.height)
+            
+    
+
 def fkIkSwitchSel(*args):
     fkIkSwitch()
 
@@ -154,7 +210,8 @@ def fkIkSwitchRangeSel(*args):
 
 
 def getPuppets(node=None):
-
+    
+    #LEGACY:
     if node:
         puppets = []
         if not isinstance(node, (list,tuple)):
@@ -322,6 +379,8 @@ def getTag(node, tag):
 
 
 def getNodeType(node):
+    if mc.attributeQuery('asset_type', node=node, exists=True):
+        return mc.getAttr(node+'.asset_type', asString=True)
     return getTag(node, 'nodeType')
 
 
@@ -338,7 +397,6 @@ def getNodesOfType(nodeType, namespaceFromNodes=None):
             namespaces.append(utl.getNamespace(each))
     else:
         namespaces = ['*:','']
-
     for ns in list(set(namespaces)):
         if nodeType == 'control' or nodeType == 'element' or nodeType == 'puppet':
             #special case for commonly queried nodes, for speed
@@ -715,7 +773,19 @@ def switchSpace(nodes=None, toSpace=None, switchRange=False, bakeOnOnes=False):
 
     if switchRange:
         start, end = utl.frameRange()
-
+    
+    #check for dynamics
+    for node in nodes:
+        nucleus = utl.getNucleusHistory(node)
+        if not nucleus:
+            parent = mc.listRelatives(node, parent=True, pa=True)
+            if parent:
+                nucleus = utl.getNucleusHistory(parent[0])
+        if nucleus:
+            if mc.getAttr(nucleus+'.enable'):
+                start = mc.getAttr(nucleus+'.startFrame')
+                bakeOnOnes = True
+            break
     #need to support this eventually for controls which have multiple space attributes.
     selChan = utl.getSelectedChannels()
 
@@ -733,7 +803,8 @@ def switchSpace(nodes=None, toSpace=None, switchRange=False, bakeOnOnes=False):
         else:
             #silly, but take the shortest one, as that's usually default
             ssAttr = min(ssData.keys(), key=len)
-
+        
+        value = None
         if isinstance(toSpace, basestring):
             for i, e in enumerate(ssData[ssAttr]['enumValues']):
                 if e.lower() == toSpace.lower():
@@ -774,7 +845,7 @@ def switchSpace(nodes=None, toSpace=None, switchRange=False, bakeOnOnes=False):
         return
 
     if switchRange:
-        utl.matchBake(controls, locators, maintainOffset=True)
+        utl.matchBake(controls, locators, maintainOffset=True, bakeOnOnes=bakeOnOnes)
 
         for ctrl, attr, value in zip(controls, attributes, values):
             if mc.keyframe(ctrl+'.'+attr, query=True, name=True):
@@ -901,8 +972,7 @@ def initPuppetContextMenu():
 
 
 def isNodePuppetControl(node):
-
-    if mc.attributeQuery(PUP_ID_PREFIX+'nodeType', exists=True, node=node):
+    if mc.attributeQuery(PUP_ID_PREFIX+'control', exists=True, node=node):
         return True
     if getNodeType(node) == 'control':
         return True
@@ -918,11 +988,11 @@ def getSpaceSwitchData(node):
     if not attrs:
         return data
 
-    ssAttrs = [x for x in attrs if 'paceSwitch' in x]
+    ssAttrs = [x for x in attrs if 'paceSwitch' in x or x == 'space']
     for attr in ssAttrs:
         enumValues = []
         spaceEnum = 'space'
-        if attr == 'spaceSwitch':
+        if attr == 'spaceSwitch' or attr == 'space':
             if not 'space' in attrs:
                 spaceEnum = 'spaceSwitch'
             enumValues = mc.attributeQuery(spaceEnum, node=node, listEnum=True)
@@ -1139,6 +1209,14 @@ def convertRotateOrderUI(nodes, *args):
 # __________________________________
 # == POSE AND ANIM MIRRORING =======
 
+def getMirrorName(node, a='Lf_', b='Rt_'):
+    if a in node:
+        return node.replace(a,b)
+    elif b in node:
+        return node.replace(b,a)
+        
+
+
 def getMirrorMap(nodes=None):
     '''
     Returns a map of all paired nodes within a puppet
@@ -1172,11 +1250,16 @@ def getMirrorPairs(nodes):
     '''
 
     nodes = mc.ls(nodes, long=True)
-    mirrorMap = getMirrorMap(nodes)
+    #mirrorMap = getMirrorMap(nodes)
     mirrorPairs = {}
+    #for each in nodes:
+        #if each in mirrorMap:
+            #mirrorPairs[each] = mirrorMap[each]
     for each in nodes:
-        if each in mirrorMap:
-            mirrorPairs[each] = mirrorMap[each]
+        mirror = getMirrorName(each)
+        if mc.objExists(mirror):
+            mirrorPairs[each] = mirror
+            
     return mirrorPairs
 
 
@@ -1239,7 +1322,13 @@ def copyPose(fromNode, toNode, flip=False):
             except:pass
 
 
-def mirrorPose(nodes, *args):
+def mirrorPose(nodes=None, *args):
+    
+    if not nodes:
+        nodes = mc.ls(sl=True)
+        
+    if not nodes:
+        raise RuntimeError('No nodes provided to mirror.')
 
     pairs = getMirrorPairs(nodes)
     done = []
@@ -1249,7 +1338,13 @@ def mirrorPose(nodes, *args):
             done.append(mirror)
 
 
-def flipPose(nodes, *args):
+def flipPose(nodes=None, *args):
+    
+    if not nodes:
+        nodes = mc.ls(sl=True)
+        
+    if not nodes:
+        raise RuntimeError('No nodes provided to mirror.')
 
     nodes = mc.ls(nodes, long=True)
 
@@ -1273,7 +1368,7 @@ def flipPose(nodes, *args):
 
 
 def copyAnimation(fromNode, toNode):
-
+    print 'copy', fromNode.split('|')[-1], toNode.split('|')[-1]
     mc.copyKey(fromNode)
     mc.pasteKey(toNode, option='replaceCompletely')
     for axis in getMirrorAxis(toNode):
@@ -1326,8 +1421,14 @@ def swapAnimation(fromNode, toNode):
         mc.scaleKey(fromNode, attribute=axis, valueScale=-1)
 
 
-def mirrorAnimation(nodes, *args):
-
+def mirrorAnimation(nodes=None, *args):
+    
+    if not nodes:
+        nodes = mc.ls(sl=True)
+        
+    if not nodes:
+        raise RuntimeError('No nodes provided to mirror.')
+    
     pairs = getMirrorPairs(nodes)
     done = []
     for node, mirror in pairs.items():

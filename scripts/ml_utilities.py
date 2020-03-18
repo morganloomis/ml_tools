@@ -60,7 +60,7 @@
 
 __author__ = 'Morgan Loomis'
 __license__ = 'MIT'
-__revision__ = 34
+__revision__ = 35
 
 import maya.cmds as mc
 import maya.mel as mm
@@ -129,7 +129,7 @@ def castToTime(time):
     return (time,)
 
 
-def constrain(source, destination, translate=True, rotate=True, scale=False):
+def constrain(source, destination, translate=True, rotate=True, scale=False, maintainOffset=False):
     '''
     Constrain two objects, even if they have some locked attributes.
     '''
@@ -161,12 +161,12 @@ def constrain(source, destination, translate=True, rotate=True, scale=False):
 
     constraints = list()
     if rotAttr and transAttr and rotSkip == 'none' and transSkip == 'none':
-        constraints.append(mc.parentConstraint(source, destination))
+        constraints.append(mc.parentConstraint(source, destination, maintainOffset=maintainOffset))
     else:
         if transAttr:
-            constraints.append(mc.pointConstraint(source, destination, skip=transSkip))
+            constraints.append(mc.pointConstraint(source, destination, skip=transSkip, maintainOffset=maintainOffset))
         if rotAttr:
-            constraints.append(mc.orientConstraint(source, destination, skip=rotSkip))
+            constraints.append(mc.orientConstraint(source, destination, skip=rotSkip, maintainOffset=maintainOffset))
 
     return constraints
 
@@ -535,6 +535,33 @@ def getIconPath():
                 return iconPath
 
 
+def getModelPanel():
+    '''Return the active or first visible model panel.'''
+    
+    panel = mc.getPanel(withFocus=True)
+
+    if mc.getPanel(typeOf=panel) != 'modelPanel':
+        #just get the first visible model panel we find, hopefully the correct one.
+        panels = getModelPanels()
+        if panels:
+            panel = panels[0]
+            mc.setFocus(panel)
+    
+    if mc.getPanel(typeOf=panel) != 'modelPanel':
+        OpenMaya.MGlobal.displayWarning('Please highlight a camera viewport.')
+        return None
+    return panel
+    
+    
+def getModelPanels():
+    '''Return all the model panels visible so you can operate on them.'''
+    panels = []
+    for p in mc.getPanel(visiblePanels=True):
+        if mc.getPanel(typeOf=p) == 'modelPanel':
+            panels.append(p)
+    return panels
+
+
 def getNamespace(node):
     '''Returns the namespace of a node with simple string parsing.'''
 
@@ -543,32 +570,45 @@ def getNamespace(node):
     return node.rsplit('|',1)[-1].rsplit(':',1)[0] + ':'
 
 
+def getNucleusHistory(node):
+    
+    history = mc.listHistory(node, levels=0)
+    if history:
+        dynamics = mc.ls(history, type='hairSystem')
+        if dynamics:
+            nucleus = mc.listConnections(dynamics[0]+'.startFrame', source=True, destination=False, type='nucleus')
+            if nucleus:
+                return nucleus[0]
+    return None
+
+
 def getRoots(nodes):
 
     objs = mc.ls(nodes, long=True)
-    tops = list()
-    namespaces = list()
+    tops = []
+    namespaces = []
+    parent = None
     for obj in objs:
         namespace = getNamespace(obj)
         if namespace in namespaces:
             #we've already done this one
             continue
-
-        hier = obj.split('|')
+        parent = mc.listRelatives(obj, parent=True, pa=True)
+        top = obj
         if not namespace:
-            #if there's no namespace, just grab the top of the hierarchy
-            if len(hier) > 1:
-                tops.append(hier[1])
-            else:
-                tops.append(obj)
-
+            while parent:
+                top = parent[0]
+                parent = mc.listRelatives(top, parent=True, pa=True)
+            
+            tops.append(top)
+        
         else:
-            #otherwise look through the hierarchy until you find the first node with the same namespace
             namespaces.append(namespace)
-            for each in hier:
-                if each.startswith(namespace):
-                    tops.append(each)
-                    break
+            while parent and parent[0].rsplit('|',1)[-1].startswith(namespace):
+                top = parent[0]
+                parent = mc.listRelatives(top, parent=True, pa=True)
+            
+            tops.append(top)
     return tops
 
 
@@ -778,6 +818,7 @@ def matchBake(source=None, destination=None, bakeOnOnes=False, maintainOffset=Fa
         allKeyTimes.sort()
 
     with UndoChunk():
+        #if 
         with IsolateViews():
             for frame in allKeyTimes:
                 #cycle through all the frames
@@ -823,6 +864,12 @@ def matchBake(source=None, destination=None, bakeOnOnes=False, maintainOffset=Fa
         mc.filterCurve(mc.listConnections(destination,type='animCurve'))
     if bakeOnOnes:
         mc.keyTangent(destination, attribute=attributes, itt='spline', ott='spline')
+
+def message(msg, position='midCenterTop'):
+    
+    OpenMaya.MGlobal.displayWarning(msg)
+    fadeTime = min(len(message)*100, 2000)
+    mc.inViewMessage( amg=msg, pos=position, fade=True, fadeStayTime=fadeTime, dragKill=True)
 
 
 def minimizeRotationCurves(obj):
@@ -1055,7 +1102,7 @@ class IsolateViews():
             self.modelPanels = mc.getPanel(type='modelPanel')
 
             #unfortunately there's no good way to know what's been isolated, so in this case if a view is isolated, skip it.
-            self.skip = list()
+            self.skip = []
             for each in self.modelPanels:
                 if mc.isolateSelect(each, query=True, state=True):
                     self.skip.append(each)
