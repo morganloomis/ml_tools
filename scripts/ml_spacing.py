@@ -73,7 +73,7 @@
 
 __author__ = 'Morgan Loomis'
 __license__ = 'MIT'
-__revision__ = 4
+__revision__ = 1
 __category__ = 'animation'
 
 try:
@@ -86,6 +86,7 @@ except ImportError:
 import maya.OpenMaya as om
 import maya.OpenMayaUI as mui
 import maya.cmds as mc
+import math
 
 try:
     import ml_utilities as utl
@@ -106,30 +107,96 @@ qt_maya_window = shiboken.wrapInstance(int(main_window_ptr), QtCore.QObject)
 
 def ui():
     '''
-    user interface for ml_pivot
+    user interface for ml_spacing
     '''
 
-    with utl.MlUi('ml_pivot', 'Change Pivot', width=400, height=150, info='''Select an animated control whose pivot you'd like to change, and press Edit Pivot.
-Your selection with change to handle, position this where you'd like the pivot to be
-and press Return. Or press ESC or deselect to cancel.''') as win:
+    with utl.MlUi('ml_spacing', 'Sp a c i  n    g', width=400, height=150, info='''Things,
+And stuff.''') as win:
 
         win.buttonWithPopup(label='Edit Pivot', command=edit_pivot, annotation='Creates a temporary node to positon for the new pivot.', shelfLabel='pivot', shelfIcon='defaultTwoStackedLayout')
         win.buttonWithPopup(label='Reset Pivot', command=reset_pivot, annotation='Rest the rotation pivot to zero.', shelfLabel='reset', shelfIcon='defaultTwoStackedLayout')
 
 
-def edit_pivot(*args):
-    context = EditPivotContext()
+def linear(x):
+    return x
+    
+def sigmoid(x):
+    return 1 / (1 + math.exp(-10*(x-0.5)))
+
+def easeIn_sine(x):
+    return math.sin(((x*0.5)-0.5)*math.pi)+1
+
+def easeOut_sine(x):
+    return math.sin((x*0.5)*math.pi)
+
+def easeInOut_sine(x):
+    return math.sin((x+1.5)*math.pi)/2+0.5
+
+def easeIn_quad(x):
+    return x**2
+
+def easeOut_quad(x):
+    return -1*x*(x-2)
+
+def easeInOut_quad(x):
+    if x<0.5:
+        return easeIn_quad(x)*2
+    else:
+        return easeOut_quad(x)*2-1
+
+def easeIn_cubic(x):
+    return x**3
+
+def easeOut_cubic(x):
+    return (x-1)**3 + 1
+
+def easeInOut_cubic(x):
+    #this doesn't work
+    if x<0.5:
+        x/=2
+        return easeIn_cubic(x)/2
+    else:
+        x/=2
+        return (easeOut_cubic(x)+2)/2
+
+
+def getPose(node):
+    data = {}
+    for attr in mc.listAttr(node, keyable=True):
+        plug = '{}.{}'.format(node, attr)
+        data[plug] = mc.getAttr(plug)
+    return data
+                
+
+def applySpacing(startPose, endPose, startFrame, endFrame, spacingFunction):
+    
+    r = endFrame-startFrame
+    step = 1.0/r
+    for attr,value in list(startPose.items()):
+        if not attr in endPose:
+            continue
+        for i in range(r+1):
+            newValue = (spacingFunction(step*i) * (endPose[attr] - value)) + value
+            mc.setKeyframe(attr, time=startFrame+i, value=newValue)
+    
+
+
+def spacing(*args):
+    context = SpacingContext()
     context.editPivot()
 
 
-class PivotKeypressFilter(QtCore.QObject):
+class KeypressFilter(QtCore.QObject):
     '''
     A qt event filter to catch the enter or escape keypresses.
     '''
     def __init__(self, enterCommand, escapeCommand):
+        '''
+        Pass a command to run on enter, and one to run on escape.
+        '''
         self.enterCommand = enterCommand
         self.escapeCommand = escapeCommand
-        super(PivotKeypressFilter, self).__init__()
+        super(KeypressFilter, self).__init__()
 
 
     def eventFilter(self, obj, event):
@@ -143,14 +210,14 @@ class PivotKeypressFilter(QtCore.QObject):
         return False
 
 
-class EditPivotContext(object):
+class SpacingContext(object):
 
     def __init__(self):
 
         self.node = None
         self.pivotHandle = None
         self.scriptJob = None
-        self.keypressFilter = PivotKeypressFilter(self.bakePivot, self.cleanup)
+        self.keypressFilter = KeypressFilter(self.bakePivot, self.cleanup)
 
 
     def editPivot(self, *args):
@@ -335,92 +402,7 @@ class EditPivotContext(object):
                 mc.lockNode(each, lock=False)
                 mc.delete(each)
 
-def pivot_driver_attr(node):
-    '''
-    Start with supporting pivots driven by remap value nodes, more support in the future as requested.
-    '''
-    #rpSrc = mc.listConnections(node+'.rotatePivot', source=True, destination=False, plugs=True)
-    #if rpSrc and rpSrc[0].endswith('.translate') and mc.getAttr(rpSrc[0], keyable=True):
-        #return rpSrc[0]
 
-    for each in ('rotatePivotX', 'rotatePivotY', 'rotatePivotZ'):
-        src = mc.listConnections(node+'.'+each, source=True, destination=False)
-        if not src:
-            continue
-        srcType = mc.nodeType(src[0])
-        if srcType == 'remapValue':
-            src = mc.listConnections(src[0]+'.inputValue', source=True, destination=False, plugs=True)
-            if src and mc.getAttr(src[0], keyable=True) and not mc.getAttr(src[0], lock=True):
-                return src[0]
-    return None
-
-
-def is_pivot_connected(node):
-    for each in ('rotatePivot', 'rotatePivotX', 'rotatePivotY', 'rotatePivotZ'):
-        if mc.listConnections(node+'.'+each, source=True, destination=False):
-            return True
-    return False
-
-
-def reset_pivot(*args):
-
-    sel = mc.ls(sl=True)
-    if not sel:
-        om.MGlobal.displayWarning('Nothing selected.')
-        return
-
-    if len(sel) > 1:
-        om.MGlobal.displayWarning('Only works on one node at a time.')
-        return
-
-    node = sel[0]
-    driver = None
-    driver_value = None
-    driver_default = None
-
-    if is_pivot_connected(node):
-        driver = pivot_driver_attr(node)
-        if driver:
-            dNode,dAttr = driver.split('.',1)
-            driver_value = mc.getAttr(driver)
-            driver_default = mc.attributeQuery(dAttr, node=dNode, listDefault=True)[0]
-            if driver_default == driver_value:
-                return
-        else:
-            om.MGlobal.displayWarning('Pivot attribute is connected, unable to edit.')
-            return
-
-    if not driver:
-        pivotPosition = mc.getAttr(node+'.rotatePivot')[0]
-        if pivotPosition  == (0.0,0.0,0.0):
-            return
-
-    tempPosition = mc.group(em=True)
-    tempPivot = mc.group(em=True)
-    tempPivot = mc.parent(tempPivot, node)[0]
-    if driver:
-        mc.setAttr(driver, driver_default)
-        newRP = mc.getAttr(node+'.rotatePivot')[0]
-        mc.setAttr(driver, driver_value)
-        mc.setAttr(tempPivot+'.translate', *newRP)
-    else:
-        mc.setAttr(tempPivot+'.translate', 0,0,0)
-
-    mc.setAttr(tempPivot+'.rotate', 0,0,0)
-
-    utl.matchBake(source=[tempPivot], destination=[tempPosition], bakeOnOnes=True, maintainOffset=False, preserveTangentWeight=False, rotate=False)
-
-    if driver:
-        mc.setAttr(driver, driver_default)
-    else:
-        mc.setAttr(node+'.rotatePivot', 0,0,0)
-
-    mc.refresh()
-    utl.matchBake(source=[tempPosition], destination=[node], bakeOnOnes=True, maintainOffset=False, preserveTangentWeight=False, rotate=False)
-
-    mc.delete(tempPosition,tempPivot)
-
-    mc.select(node)
 
 
 if __name__ == '__main__':
@@ -431,8 +413,3 @@ if __name__ == '__main__':
 #
 # Revision 1: 2016-06-21 : First publish.
 #
-# Revision 2: 2017-06-26 : update for pySide2, maya 2017
-#
-# Revision 3: 2017-07-17 : initial support for attribute driven pivots
-#
-# Revision 4: 2018-02-17 : Updating license to MIT.

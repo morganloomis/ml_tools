@@ -244,9 +244,9 @@ def createHotkey(command, name, description='', python=True):
     '''
 
     if MAYA_VERSION > 2015:
-        print "Creating hotkeys currently doesn't work in the new hotkey editor."
-        print "Here's the command, you'll have to make the hotkey yourself (sorry):"
-        print command
+        print("Creating hotkeys currently doesn't work in the new hotkey editor.")
+        print("Here's the command, you'll have to make the hotkey yourself (sorry):")
+        print(command)
         OpenMaya.MGlobal.displayWarning("Couldn't create hotkey, please see script editor for details...")
         return
 
@@ -343,7 +343,7 @@ def formLayoutGrid(form, controls, offset=1):
         for c,ctrl in enumerate(row):
             position['left'] = c*colInc
             position['right'] = (c+1)*colInc
-            for k in position.keys():
+            for k in list(position.keys()):
                 kwargs['attachPosition'].append((ctrl, k, offset, position[k]))
 
     mc.formLayout(form, **kwargs)
@@ -584,7 +584,7 @@ def getNucleusHistory(node):
 
 def getRoots(nodes):
 
-    objs = mc.ls(nodes, long=True)
+    objs = mc.ls(nodes, int=True)
     tops = []
     namespaces = []
     parent = None
@@ -812,7 +812,7 @@ def matchBake(source=None, destination=None, bakeOnOnes=False, maintainOffset=Fa
 
 
     if bakeOnOnes:
-        allKeyTimes = range(int(start), int(end)+1)
+        allKeyTimes = list(range(int(start), int(end)+1))
     else:
         allKeyTimes = list(set(allKeyTimes))
         allKeyTimes.sort()
@@ -859,7 +859,7 @@ def matchBake(source=None, destination=None, bakeOnOnes=False, maintainOffset=Fa
         mc.currentTime(resetTime, edit=True)
         mc.select(destination, replace=True)
 
-    mc.delete(duplicates.values())
+    mc.delete(list(duplicates.values()))
     if rotate:
         mc.filterCurve(mc.listConnections(destination,type='animCurve'))
     if bakeOnOnes:
@@ -868,7 +868,7 @@ def matchBake(source=None, destination=None, bakeOnOnes=False, maintainOffset=Fa
 def message(msg, position='midCenterTop'):
     
     OpenMaya.MGlobal.displayWarning(msg)
-    fadeTime = min(len(message)*100, 2000)
+    fadeTime = min(len(msg)*100, 2000)
     mc.inViewMessage( amg=msg, pos=position, fade=True, fadeStayTime=fadeTime, dragKill=True)
 
 
@@ -1147,9 +1147,9 @@ class KeySelection(object):
 
         #if args are passed in, this has been called from and out of date script. Warn and fail.
         if args:
-            print ''
-            print "Because of an update to ml_utilities, the tool you're trying to run is deprecated and needs to be updated as well."
-            print "Please visit http://morganloomis.com/tools and download the latest version of this tool."
+            print('')
+            print("Because of an update to ml_utilities, the tool you're trying to run is deprecated and needs to be updated as well.")
+            print("Please visit http://morganloomis.com/tools and download the latest version of this tool.")
             OpenMaya.MGlobal.displayError('Tool out of date. See script editor for details.')
             return
 
@@ -1411,7 +1411,7 @@ class KeySelection(object):
         for each in graphVis:
             try:
                 self._curves.extend(mc.keyframe(each, query=True, name=True))
-            except StandardError:
+            except Exception:
                 pass
 
 
@@ -1955,11 +1955,11 @@ class MlUi(object):
             __import__(self.module)
             module = sys.modules[self.module]
             text = text+'Revision: '+str(module.__revision__)+'\n'
-        except StandardError:
+        except Exception:
             pass
         try:
             text = text+'ml_utilities Rev: '+str(__revision__)+'\n'
-        except StandardError:
+        except Exception:
             pass
 
         mc.confirmDialog(title=self.name, message=text, button='Close')
@@ -2106,7 +2106,7 @@ class MlUi(object):
             if self.uiArgDict:
                 #this is some fanciness to read the values of UI elements and generate or run the resulting command
                 #keys represent the argument names, the values are UI elements
-                for k in self.uiArgDict.keys():
+                for k in list(self.uiArgDict.keys()):
 
                     uiType = mc.objectTypeUI(self.uiArgDict[k])
                     value = None
@@ -2121,12 +2121,12 @@ class MlUi(object):
                             try:
                                 value = mc.floatSliderGrp(self.uiArgDict[k], query=True, value=True)
 
-                            except StandardError:
+                            except Exception:
                                 pass
                             try:
                                 value = mc.intSliderGrp(self.uiArgDict[k], query=True, value=True)
 
-                            except StandardError:
+                            except Exception:
                                 pass
                         elif 'field1' in controls:
                             value = mc.floatFieldGrp(self.uiArgDict[k], query=True, value1=True)
@@ -2155,7 +2155,7 @@ class MlUi(object):
             cmd = 'import '+self.name+'\n'+self.name+'.'+self.command.__name__+'('
 
             comma = False
-            for k,v in self.kwargs.items():
+            for k,v in list(self.kwargs.items()):
                 value = v
                 if isinstance(v, str):
                     value = "'"+value+"'"
@@ -2292,14 +2292,14 @@ class Vector:
 
         if self._isCompatible(other):
             return Vector(*[a*b for a,b in zip(self,other)])
-        elif isinstance(other, (float,int,long)):
+        elif isinstance(other, (float,int)):
             return Vector(*[x*float(other) for x in self])
         else:
             raise TypeError("Can't multiply {} with {}".format(self, other))
 
 
     def __div__(self, other):
-        if isinstance(other, (float,int,long)):
+        if isinstance(other, (float,int)):
             return Vector(*[x/float(other) for x in self])
         else:
             raise TypeError("Can't divide {} by {}".format(self, other))

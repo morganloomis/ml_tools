@@ -429,7 +429,7 @@ def arcDataFast(objs, parentGrp, start, end, space, nearClipPlane, cam=None):
         mc.pointConstraint(obj, sample)
 
         #frame loop:
-        time = range(int(start),int(end+1))
+        time = list(range(int(start),int(end+1)))
 
         for t in time:
             objPnt = []
@@ -487,7 +487,7 @@ def arcDataAccurate(objs, parentGrp, start, end, space, nearClipPlane, cam=None)
         mc.parent(loc,parentGrp)
 
         #frame loop:
-        time = range(int(start),int(end+1))
+        time = list(range(int(start),int(end+1)))
         for t in time:
             mc.currentTime(t, edit=True)
 
@@ -530,7 +530,7 @@ def retraceArc(*args):
         mc.select(ML_TRACE_ARC_PREVIOUS_SELECTION, replace=True)
         traceArc(space=ML_TRACE_ARC_PREVIOUS_SPACE)
         mc.select(sel,replace=True)
-    except StandardError:
+    except Exception:
         pass
 
 
@@ -541,7 +541,7 @@ def clearArcs(*args):
 
     try:
         mc.delete('ml_arcGroup')
-    except StandardError:
+    except Exception:
         pass
 
 

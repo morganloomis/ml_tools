@@ -199,7 +199,7 @@ def unparentShape(objs=None):
             newTransforms[shapeParent] = mc.parent(newTransforms[shapeParent], world=True)[0]
 
         shape = mc.parent(each, newTransforms[shapeParent], shape=True, relative=True)[0]
-    return newTransforms.values()
+    return list(newTransforms.values())
 
 
 if __name__ == '__main__':

@@ -150,7 +150,7 @@ def deleteKey(deleteSubFrames=False, selectedKeys=False, selectedChannels=False,
     '''
 
     if selectedChannels:
-        print 'selectedChannels flag is deprecated, please use the deleteChannels() function instead'
+        print('selectedChannels flag is deprecated, please use the deleteChannels() function instead')
 
     keySel = utl.KeySelection()
 

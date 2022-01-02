@@ -193,7 +193,7 @@ def fromLocators(bakeOnOnes=False):
                 source.append(src)
                 destination.append(dest)
 
-        except StandardError:
+        except Exception:
             pass
 
     if not destination:
@@ -206,7 +206,7 @@ def fromLocators(bakeOnOnes=False):
         if constraints:
             try:
                 mc.delete(constraints)
-            except StandardError:
+            except Exception:
                 pass
 
     utl.matchBake(source, destination, bakeOnOnes=bakeOnOnes)

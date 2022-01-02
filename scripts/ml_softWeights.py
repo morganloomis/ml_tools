@@ -130,7 +130,7 @@ def getSoftSelectionWeights():
 
             weights['{}.vtx[{}]'.format(node, fnComp.element(i))] = weight
 
-        iter.next()
+        next(iter)
 
     return weights
 
@@ -158,7 +158,7 @@ def softSelectionClusterWeights(*args):
 
     for vert in mc.ls(sel[0]+'.vtx[*]', fl=True, l=True):
         weight = 0.0
-        if vert in weights.keys():
+        if vert in list(weights.keys()):
             weight = weights[vert]
         mc.percent(clusterNode, vert, v=weight)
 
@@ -195,7 +195,7 @@ def softSelectionSkinWeights(*args):
     for influence in influences:
         mc.skinCluster(skin, edit=True, influence=influence, lockWeights=False)
 
-    for vertex, weight in weights.items():
+    for vertex, weight in list(weights.items()):
         mc.skinPercent(skin, vertex, transformValue=(joint, weight))
 
     mc.select(joint)

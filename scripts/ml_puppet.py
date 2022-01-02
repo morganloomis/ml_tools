@@ -77,7 +77,7 @@ __revision__ = 24
 import maya.cmds as mc
 import maya.mel as mm
 from functools import partial
-import math, re, warnings
+import math, re, warnings, os
 
 try:
     import ml_utilities as utl
@@ -112,6 +112,7 @@ except ImportError:
 
 PUP_ID_PREFIX = 'pupID_'
 CONTROL_ATTR = PUP_ID_PREFIX+'control'
+APPENDAGE_ATTR = 'puppeteer_appendage'
 
 def main():
     initPuppetContextMenu()
@@ -258,7 +259,7 @@ def getWorldSpaceControls(nodes, *args):
         if not ssData:
             continue
 
-        for attr, value in ssData.items():
+        for attr, value in list(ssData.items()):
             if value['currentValue'] == 'World':
                 wsCtrls.append(ctrl)
                 break
@@ -326,9 +327,19 @@ def selectElementControls(nodes=None, *args):
     if ctrls:
         mc.select(ctrls)
 
+def get_appendage(node):
+    if mc.attributeQuery(APPENDAGE_ATTR, node=node, exists=True):
+        return node
+    parent = mc.listRelatives(node, parent=True, pa=True)
+    if parent:
+        return get_appendage(parent[0])
+    return None
+
 
 def getElementsAbove(nodes=None):
-
+    '''
+    Legacy, no longer used.
+    '''
     elements = []
     if not nodes:
         nodes = mc.ls(sl=True)
@@ -428,7 +439,7 @@ def snap(node, snapTo):
         for b in ('x','y','z'):
             try:
                 mc.setAttr(node+a+b, mc.getAttr(dup+a+b))
-            except StandardError:
+            except Exception:
                 pass
 
     mc.delete(dup)
@@ -614,7 +625,7 @@ def fkIkSwitch(nodes=None, switchTo=None, switchRange=False, bakeOnOnes=False):
                 if keytimes:
                     elemDict[elem]['keytimes'] = list(set(keytimes))
                 else:
-                    elemDict[elem]['keytimes'] = range(int(start), int(end))
+                    elemDict[elem]['keytimes'] = list(range(int(start), int(end)))
                 elemDict[elem]['controls'] = data['ikControls']
                 elemDict[elem]['controls'].append(data['pvControl'])
 
@@ -643,7 +654,7 @@ def fkIkSwitch(nodes=None, switchTo=None, switchRange=False, bakeOnOnes=False):
                 if keytimes:
                     elemDict[elem]['keytimes'] = list(set(keytimes))
                 else:
-                    elemDict[elem]['keytimes'] = range(int(start),int(end))
+                    elemDict[elem]['keytimes'] = list(range(int(start),int(end)))
                 elemDict[elem]['controls'] = data['fkChain']
 
             selection.append(data['fkChain'][0])
@@ -798,14 +809,14 @@ def switchSpace(nodes=None, toSpace=None, switchRange=False, bakeOnOnes=False):
         ssData = getSpaceSwitchData(node)
         if not ssData:
             continue
-        if selChan and selChan[0] in ssData.keys():
+        if selChan and selChan[0] in list(ssData.keys()):
             ssAttr = selChan[0]
         else:
             #silly, but take the shortest one, as that's usually default
-            ssAttr = min(ssData.keys(), key=len)
+            ssAttr = min(list(ssData.keys()), key=len)
         
         value = None
-        if isinstance(toSpace, basestring):
+        if isinstance(toSpace, str):
             for i, e in enumerate(ssData[ssAttr]['enumValues']):
                 if e.lower() == toSpace.lower():
                     value=i
@@ -813,12 +824,12 @@ def switchSpace(nodes=None, toSpace=None, switchRange=False, bakeOnOnes=False):
         elif isinstance(value, (float, int)):
             value = toSpace
         else:
-            print 'Space value not valid:',toSpace
+            print('Space value not valid:',toSpace)
             continue
         currentValue = mc.getAttr(node+'.'+ssAttr)
 
         if currentValue == value:
-            print '{} space already set to {}, skipping'.format(node, toSpace)
+            print('{} space already set to {}, skipping'.format(node, toSpace))
             continue
 
         locator = mc.spaceLocator(name='TEMP#')[0]
@@ -866,23 +877,28 @@ def switchSpace(nodes=None, toSpace=None, switchRange=False, bakeOnOnes=False):
         mc.select(sel)
 
 
+def getDagMenuScript():
+    result = mm.eval('whatIs createSelectMenuItems')
+    filename = None
+    if 'found in: ' in result:
+        filename = result.split('found in: ')[-1]
+        if os.path.isfile(filename):
+            return filename
+    mm.eval('source dagMenuProc.mel')
+    result = mm.eval('whatIs dagMenuProc')
+    if not 'found in: ' in result:
+        return None
+    filename = result.split('found in: ')[-1]
+    return filename
+
+
 def initPuppetContextMenu():
 
-    result = mm.eval('whatIs createSelectMenuItems')
-
-    #may need sourcing if it isn't found
-    if result == 'Unknown':
-        mm.eval('source dagMenuProc.mel')
-        #try again
-        result = mm.eval('whatIs dagMenuProc')
-
-    #now check again if its from a file, if not we've already done this.
-    if not 'found in: ' in result:
-        #if this function was added interactively already, don't do anything
-        return
-
     #get the file name
-    filename = result.split('found in: ')[-1]
+    filename = getDagMenuScript()
+    if not filename:
+        raise RuntimeError('Unable to initialize Puppet Context Menu.')
+    
 
     #globalize a proc which would otherwise fail
     mm.eval('''global proc optionalDagMenuProc( string $parent, string $item )
@@ -1019,12 +1035,14 @@ def puppetContextMenu(parent, node):
     if not nodes:
         nodes = [node]
 
-    element = None
+    appendage = None
     puppet = None
-    elements = getElementsAbove(nodes)
-    if elements:
-        element = elements[0]
-        puppets = getPuppets(element)
+    for node in nodes:
+        appendage = get_appendage(node)
+        if appendage:
+            break
+    if appendage:
+        puppets = getPuppets(appendage)
         if puppets:
             puppet = puppets[0]
 
@@ -1037,9 +1055,9 @@ def puppetContextMenu(parent, node):
 
     mc.menuItem(label='Keyed', radialPosition='SE', command=partial(selectKeyed, nodes))
 
-    if element:
-        mc.menuItem(label='Select Element', radialPosition='NE', command=partial(selectElements,nodes))
-        mc.menuItem(label='Select Elem Controls', radialPosition='E', command=partial(selectElementControls,nodes))
+    if appendage:
+        mc.menuItem(label='Select Appendage', radialPosition='NE', command=partial(selectElements,nodes))
+        mc.menuItem(label='Select Appendage Controls', radialPosition='E', command=partial(selectElementControls,nodes))
 
     #mirror controls west
     mc.menuItem(label='Flip Selection', radialPosition='W', command=partial(selectReplaceMirror, nodes))
@@ -1053,82 +1071,87 @@ def puppetContextMenu(parent, node):
         mc.menuItem(label='Reset Control'+append, command=ml_resetChannels.resetPuppetControl)
         mc.menuItem(divider=True)
 
-    puppetAttributes = ['geometrySelectable','controlMode']
-    if puppet and puppetAttributes:
-        doAttrs = []
-        for attr in puppetAttributes:
-            if mc.attributeQuery(attr, node=puppet, exists=True):
-                doAttrs.append(attr)
+    ##selection
+    #if appendage or puppet:
 
-        if doAttrs:
-            mc.menuItem(label='Puppet Settings', subMenu=True)
+        #mc.menuItem(label='Selection', subMenu=True)
 
-            for attr in doAttrs:
-                attributeMenuItem(puppet, attr)
+        ##select parent element
 
-            mc.setParent('..', menu=True)
+        ##select all worldspace controls
+        #mc.menuItem(label='Select World Space Controls', command=partial(selectWorldSpaceControls, nodes))
+        #mc.menuItem(label='Select Ik Controls', command=partial(selectIkControls, nodes))
+        #mc.menuItem(label='Select Fk Controls', command=partial(selectFkControls, nodes))
+        ##invert control selection
+        #mc.menuItem(label='Invert Selection', command=partial(invertSelection, nodes))
+        #mc.setParent('..', menu=True)
 
-    #selection
-    if element or puppet:
+        #mc.menuItem(divider=True, dividerLabel='Visibility')
 
-        mc.menuItem(label='Selection', subMenu=True)
+        #mc.menuItem(label='Control Visibility', subMenu=True)
 
-        #select parent element
+        #mc.menuItem(label='Show All', command=partial(showAllControls, puppet))
 
-        #select all worldspace controls
-        mc.menuItem(label='Select World Space Controls', command=partial(selectWorldSpaceControls, nodes))
-        mc.menuItem(label='Select Ik Controls', command=partial(selectIkControls, nodes))
-        mc.menuItem(label='Select Fk Controls', command=partial(selectFkControls, nodes))
-        #invert control selection
-        mc.menuItem(label='Invert Selection', command=partial(invertSelection, nodes))
-        mc.setParent('..', menu=True)
+        ##mc.menuItem(divider=True)
+        ##for visAttr,shortName in zip(('geoVisibility','controlVisibility','secondaryControlVisibility'),('Geo','Controls','Secondary')):
 
-        mc.menuItem(divider=True, dividerLabel='Visibility')
+            ##if mc.attributeQuery(visAttr, exists=True, node=element):
+                ##if mc.getAttr(element+'.'+visAttr):
+                    ##mc.menuItem(label='Hide '+shortName, command=partial(mc.setAttr, element+'.'+visAttr, 0))
+                ##else:
+                    ##mc.menuItem(label='Show '+shortName, command=partial(mc.setAttr, element+'.'+visAttr, 1))
 
-        mc.menuItem(label='Control Visibility', subMenu=True)
+        #mc.setParent('..', menu=True)
 
-        mc.menuItem(label='Show All', command=partial(showAllControls, puppet))
+        #if puppet:
+            #if mc.attributeQuery('visibilitySets', exists=True, node=puppet):
+                #sets = mc.listConnections('{}.visibilitySets'.format(puppet), type='objectSet', source=False, destination=True)
+                #if sets:
+                    #mc.menuItem(label='Hide Sets', subMenu=True)
+                    #for s in sets:
+                        #mc.menuItem(label=s, command='import maya.cmds;maya.cmds.hide("{}")'.format(s))
+                    #mc.setParent('..', menu=True)
 
+                    #mc.menuItem(label='Show Sets', subMenu=True)
+                    #mc.menuItem(label='Show All', command='import maya.cmds;maya.cmds.showHidden({})'.format(','.join(['"{}"'.format(x) for x in sets])))
+                    #mc.menuItem(divider=True)
+                    #for s in sets:
+                        #mc.menuItem(label=s, command='import maya.cmds;maya.cmds.showHidden("{}")'.format(s))
+                    #mc.setParent('..', menu=True)
+
+        #mc.menuItem(divider=True)
+
+    #mc.menuItem(label='Mirroring', subMenu=True)
+    #mc.menuItem(label='Mirror Pose', command=partial(mirrorPose, nodes))
+    #mc.menuItem(label='Flip Pose', command=partial(flipPose, nodes))
+    #mc.menuItem(divider=True)
+    #mc.menuItem(label='Mirror Animation', command=partial(mirrorAnimation, nodes))
+    #mc.menuItem(label='Flip Animation', command=partial(flipAnimation, nodes))
+    #mc.setParent('..', menu=True)
+    
+    #rotate order
+    if ml_convertRotationOrder and mc.getAttr(node+'.rotateOrder', channelBox=True):
         mc.menuItem(divider=True)
-        for visAttr,shortName in zip(('geoVisibility','controlVisibility','secondaryControlVisibility'),('Geo','Controls','Secondary')):
-
-            if mc.attributeQuery(visAttr, exists=True, node=element):
-                if mc.getAttr(element+'.'+visAttr):
-                    mc.menuItem(label='Hide '+shortName, command=partial(mc.setAttr, element+'.'+visAttr, 0))
-                else:
-                    mc.menuItem(label='Show '+shortName, command=partial(mc.setAttr, element+'.'+visAttr, 1))
-
-        mc.setParent('..', menu=True)
-
-        if puppet:
-            if mc.attributeQuery('visibilitySets', exists=True, node=puppet):
-                sets = mc.listConnections('{}.visibilitySets'.format(puppet), type='objectSet', source=False, destination=True)
-                if sets:
-                    mc.menuItem(label='Hide Sets', subMenu=True)
-                    for s in sets:
-                        mc.menuItem(label=s, command='import maya.cmds;maya.cmds.hide("{}")'.format(s))
-                    mc.setParent('..', menu=True)
-
-                    mc.menuItem(label='Show Sets', subMenu=True)
-                    mc.menuItem(label='Show All', command='import maya.cmds;maya.cmds.showHidden({})'.format(','.join(['"{}"'.format(x) for x in sets])))
-                    mc.menuItem(divider=True)
-                    for s in sets:
-                        mc.menuItem(label=s, command='import maya.cmds;maya.cmds.showHidden("{}")'.format(s))
-                    mc.setParent('..', menu=True)
-
-        mc.menuItem(divider=True)
-
-    mc.menuItem(label='Mirroring', subMenu=True)
-    mc.menuItem(label='Mirror Pose', command=partial(mirrorPose, nodes))
-    mc.menuItem(label='Flip Pose', command=partial(flipPose, nodes))
-    mc.menuItem(divider=True)
-    mc.menuItem(label='Mirror Animation', command=partial(mirrorAnimation, nodes))
-    mc.menuItem(label='Flip Animation', command=partial(flipAnimation, nodes))
-    mc.setParent('..', menu=True)
-
+        roo = mc.getAttr(node+'.rotateOrder')
+        #rotOrders = ('xyz')
+        mc.menuItem(label='Rotate Order', subMenu=True)
+        mc.menuItem(label='Convert Rotate Order UI', command=partial(convertRotateOrderUI, nodes))    
+    
+    #== from here out, populate by code nodes ===============================
+    codeNodes = []
+    for a in [node, appendage]:
+        connected = mc.listConnections(a+'.message', source=False)
+        for b in connected:
+            if mc.attributeQuery('puppeteer_data_code', node=b, exists=True):
+                codeNodes.append(b)
+    
+    for codeNode in codeNodes:
+        #eval menu command
+        pass
+    
     #== custom by node type ===============================
     #fkIkSwitching
-    if element and mc.attributeQuery('fkIkSwitch', exists=True, node=element):
+    if appendage and mc.attributeQuery('fkIkSwitch', exists=True, node=element):
         mc.menuItem(divider=True, dividerLabel='FK/IK')
         state = mc.getAttr(element+'.fkIkSwitch')
 
@@ -1142,34 +1165,26 @@ def puppetContextMenu(parent, node):
         mc.menuItem(label='IK', command=partial(fkIkSwitch, nodes, 1, True))
         mc.setParent('..', menu=True)
 
-
+    
     #space switching
     #attrs = mc.listAttr(node, userDefined=True, keyable=True)
-    ssData = getSpaceSwitchData(node)
-    if ssData:
-        mc.menuItem(divider=True, dividerLabel='Space')
-        for key, value in ssData.items():
-            mc.menuItem(label='Switch '+key, subMenu=True)
-            for each in value['enumValues']:
-                if each == value['currentValue']:
-                    continue
-                mc.menuItem(label=each, command=partial(switchSpace, nodes, each))
-            mc.setParent('..', menu=True)
-            mc.menuItem(label='Bake '+key, subMenu=True)
-            for each in value['enumValues']:
-                if each == value['currentValue']:
-                    continue
-                mc.menuItem(label=each, command=partial(switchSpace, nodes, each, True))
-            mc.setParent('..', menu=True)
+    enumValues = mc.attributeQuery('space', node=node, listEnum=True)
+    if enumValues:
+        enumValues = enumValues[0].split(':')
+        currentValue = mc.getAttr(node+'.space', asString=True)
+        mc.menuItem(label='Switch Space', subMenu=True)
+        for each in enumValues:
+            if each == currentValue:
+                continue
+            mc.menuItem(label=each, command=partial(switchSpace, nodes, each))
+        mc.setParent('..', menu=True)
+        mc.menuItem(label='Bake Space', subMenu=True)
+        for each in enumValues:
+            if each == currentValue:
+                continue
+            mc.menuItem(label=each, command=partial(switchSpace, nodes, each, True))
+        mc.setParent('..', menu=True)
 
-    #rotate order
-    if ml_convertRotationOrder:
-        if mc.getAttr(node+'.rotateOrder', channelBox=True):
-            mc.menuItem(divider=True)
-            roo = mc.getAttr(node+'.rotateOrder')
-            #rotOrders = ('xyz')
-            mc.menuItem(label='Rotate Order', subMenu=True)
-            mc.menuItem(label='Convert Rotate Order UI', command=partial(convertRotateOrderUI, nodes))
 
 
 def attributeMenuItem(node, attr):
@@ -1223,9 +1238,9 @@ def getMirrorMap(nodes=None):
     '''
 
     puppets = getPuppets(nodes)
-    puppets = mc.ls(puppets, long=True)[0]
+    puppets = mc.ls(puppets, int=True)[0]
 
-    allNodes = mc.ls('*.mirrorIndex', o=True, long=True, recursive=True)
+    allNodes = mc.ls('*.mirrorIndex', o=True, int=True, recursive=True)
 
     found = {}
     pairs = {}
@@ -1235,7 +1250,7 @@ def getMirrorMap(nodes=None):
                 continue
             value = mc.getAttr('{}.mirrorIndex'.format(node))
 
-            if value in found.keys():
+            if value in list(found.keys()):
                 pairs[found[value]] = node
                 pairs[node] = found[value]
                 continue
@@ -1249,7 +1264,7 @@ def getMirrorPairs(nodes):
     Keys are the input nodes, values are the mirrored nodes.
     '''
 
-    nodes = mc.ls(nodes, long=True)
+    nodes = mc.ls(nodes, int=True)
     #mirrorMap = getMirrorMap(nodes)
     mirrorPairs = {}
     #for each in nodes:
@@ -1274,12 +1289,12 @@ def getMirrorAxis(node):
 
 
 def selectReplaceMirror(nodes, *args):
-    mc.select(getMirrorPairs(nodes).values())
+    mc.select(list(getMirrorPairs(nodes).values()))
 
 
 def selectAddMirror(nodes, *args):
     pairs = getMirrorPairs(nodes)
-    mc.select(pairs.keys()+pairs.values())
+    mc.select(list(pairs.keys())+list(pairs.values()))
 
 
 def copyPose(fromNode, toNode, flip=False):
@@ -1332,7 +1347,7 @@ def mirrorPose(nodes=None, *args):
 
     pairs = getMirrorPairs(nodes)
     done = []
-    for node, mirror in pairs.items():
+    for node, mirror in list(pairs.items()):
         if node not in done:
             copyPose(node, mirror)
             done.append(mirror)
@@ -1346,10 +1361,10 @@ def flipPose(nodes=None, *args):
     if not nodes:
         raise RuntimeError('No nodes provided to mirror.')
 
-    nodes = mc.ls(nodes, long=True)
+    nodes = mc.ls(nodes, int=True)
 
     flipPairs = getMirrorPairs(nodes)
-    flipSingles = [x for x in nodes if x not in flipPairs.keys()]
+    flipSingles = [x for x in nodes if x not in list(flipPairs.keys())]
 
     #do the singles:
     for node in flipSingles:
@@ -1361,14 +1376,14 @@ def flipPose(nodes=None, *args):
                 except:pass
     #do the pairs
     done = []
-    for node, mirror in flipPairs.items():
+    for node, mirror in list(flipPairs.items()):
         if node not in done:
             copyPose(node, mirror, flip=True)
             done.append(mirror)
 
 
 def copyAnimation(fromNode, toNode):
-    print 'copy', fromNode.split('|')[-1], toNode.split('|')[-1]
+    print('copy', fromNode.split('|')[-1], toNode.split('|')[-1])
     mc.copyKey(fromNode)
     mc.pasteKey(toNode, option='replaceCompletely')
     for axis in getMirrorAxis(toNode):
@@ -1431,7 +1446,7 @@ def mirrorAnimation(nodes=None, *args):
     
     pairs = getMirrorPairs(nodes)
     done = []
-    for node, mirror in pairs.items():
+    for node, mirror in list(pairs.items()):
         if node not in done:
             copyAnimation(node, mirror)
             done.append(mirror)
@@ -1439,9 +1454,9 @@ def mirrorAnimation(nodes=None, *args):
 
 def flipAnimation(nodes, *args):
 
-    nodes = mc.ls(nodes, long=True)
+    nodes = mc.ls(nodes, int=True)
     pairs = getMirrorPairs(nodes)
-    flipSingles = [x for x in nodes if x not in pairs.keys()]
+    flipSingles = [x for x in nodes if x not in list(pairs.keys())]
 
     #do the singles:
     for node in flipSingles:
@@ -1450,7 +1465,7 @@ def flipAnimation(nodes, *args):
             mc.scaleKey(plug, attribute=axis, valueScale=-1)
 
     done = []
-    for node, mirror in pairs.items():
+    for node, mirror in list(pairs.items()):
         if node not in done:
             swapAnimation(node, mirror)
             done.append(mirror)

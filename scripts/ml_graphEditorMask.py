@@ -167,13 +167,13 @@ def selected(*args):
     filters = list()
     for c in curves:
         plug = mc.listConnections(c, plugs=True, source=False, destination=True)[0]
-        print plug
+        print(plug)
         filters.append(mc.itemFilter(byName=plug, classification='user'))
 
-    print filters
+    print(filters)
     selectedFilter = mc.itemFilter(union=filters)
     #mc.delete(filters)
-    print selectedFilter
+    print(selectedFilter)
     mc.outlinerEditor('graphEditor1OutlineEd', edit=True, attrFilter=selectedFilter)
 
 

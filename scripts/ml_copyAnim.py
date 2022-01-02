@@ -191,7 +191,7 @@ def copyHierarchy(sourceTop=None, destinationTop=None, pasteMethod='replace', of
         name = each.rsplit('|')[-1].rsplit(':')[-1]
         if name in duplicate:
             continue
-        if name in destNodeMap.keys():
+        if name in list(destNodeMap.keys()):
             duplicate.append(name)
             continue
         destNodeMap[name] = each
@@ -209,10 +209,10 @@ def copyHierarchy(sourceTop=None, destinationTop=None, pasteMethod='replace', of
         nodeName = node.rsplit('|')[-1].rsplit(':')[-1]
 
         if nodeName in duplicate:
-            print 'Two or more destination nodes have the same name: '+destNS+nodeName
+            print('Two or more destination nodes have the same name: '+destNS+nodeName)
             continue
-        if nodeName not in destNodeMap.keys():
-            print 'Cannot find destination node: '+destNS+nodeName
+        if nodeName not in list(destNodeMap.keys()):
+            print('Cannot find destination node: '+destNS+nodeName)
             continue
 
         copyAnimation(source=node, destination=destNodeMap[nodeName], pasteMethod=pasteMethod, offset=offset, start=start, end=end, layer=layer, rotateOrder=rotateOrder)

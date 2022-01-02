@@ -119,7 +119,7 @@ class CameraDepthDragger(utl.Dragger):
         for obj in sel:
             #make sure all translate attributes are settable
             if not mc.getAttr(obj+'.translate', settable=True):
-                print 'not settable'
+                print('not settable')
                 continue
 
             #get the position of the objects as a vector, and subtract the camera vector from that

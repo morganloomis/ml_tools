@@ -177,7 +177,7 @@ def setAttributeState(lock=None, hide=None):
             for attr in attrs:
                 try:
                     mc.setAttr(obj+'.'+attr, **kwargs)
-                except StandardError: pass
+                except Exception: pass
 
 #      ______________________
 # - -/__ Revision History __/- - - - - - - - - - - - - - - - - - - - - - - -

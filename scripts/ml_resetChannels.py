@@ -125,7 +125,7 @@ def main(selectedChannels=True, transformsOnly=False, excludeChannels=None):
                 try:
                     default = mc.attributeQuery(attr, listDefault=True, node=obj)[0]
                     mc.setAttr(obj+'.'+attr, default)
-                except StandardError:
+                except Exception:
                     pass
 
     utl.deselectChannels()

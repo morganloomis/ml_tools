@@ -154,8 +154,8 @@ def createCenterOfMass(*args):
     if not len(sel) == 1:
         raise RuntimeError('Please select the root control of your puppet.')
 
-    print 'Create Center Of Mass Node'
-    print '--------------------------'
+    print('Create Center Of Mass Node')
+    print('--------------------------')
 
     meshes = meshesFromReference(sel[0]) or meshesFromHistory(sel[0])
 
@@ -165,9 +165,9 @@ def createCenterOfMass(*args):
     mc.select(meshes)
     mc.refresh()
 
-    print 'Discovered Meshes:'
+    print('Discovered Meshes:')
     for mesh in meshes:
-        print '\t',mesh
+        print('\t',mesh)
 
     skinnedMeshes = []
     for mesh in meshes:
@@ -423,7 +423,7 @@ def centerOfMassLocator(meshes):
 
         mc.progressWindow(edit=True, status='Calculating joint weights...')
 
-        for joint, verts in jointMap.items():
+        for joint, verts in list(jointMap.items()):
 
             # Check if the dialog has been cancelled
             if mc.progressWindow( query=True, isCancelled=True ):
@@ -457,11 +457,11 @@ def centerOfMassLocator(meshes):
     scale = sum(scales)*2
     mc.setAttr(locShape+'.localScale',scale,scale,scale)
 
-    args = constraintWeights.keys()
+    args = list(constraintWeights.keys())
     args.append(loc)
     con = mc.pointConstraint(*args)[0]
     weightAttrs = mc.listAttr(con, ud=True)
-    for attr,value in zip(weightAttrs, constraintWeights.values()):
+    for attr,value in zip(weightAttrs, list(constraintWeights.values())):
         mc.setAttr('{}.{}'.format(con, attr), value)
 
     return loc
@@ -520,7 +520,7 @@ def getMaxInfluenceMap(model):
     # whose value is the influence list id
     infIds = {}
     joints = {}
-    for x in xrange(infDags.length()):
+    for x in range(infDags.length()):
         infPath = infDags[x].fullPathName()
         infId = int(skinFn.indexForInfluenceObject(infDags[x]))
         infIds[infId] = x
@@ -535,7 +535,7 @@ def getMaxInfluenceMap(model):
 
     #joint is key, value is list of vertices
     weights = {}
-    for vId in xrange(wlPlug.numElements()):
+    for vId in range(wlPlug.numElements()):
         #loop through verts
 
         # tell the weights attribute which vertex id it represents
