@@ -584,7 +584,7 @@ def getNucleusHistory(node):
 
 def getRoots(nodes):
 
-    objs = mc.ls(nodes, int=True)
+    objs = mc.ls(nodes, long=True)
     tops = []
     namespaces = []
     parent = None

@@ -1238,9 +1238,9 @@ def getMirrorMap(nodes=None):
     '''
 
     puppets = getPuppets(nodes)
-    puppets = mc.ls(puppets, int=True)[0]
+    puppets = mc.ls(puppets, long=True)[0]
 
-    allNodes = mc.ls('*.mirrorIndex', o=True, int=True, recursive=True)
+    allNodes = mc.ls('*.mirrorIndex', o=True, long=True, recursive=True)
 
     found = {}
     pairs = {}
@@ -1264,7 +1264,7 @@ def getMirrorPairs(nodes):
     Keys are the input nodes, values are the mirrored nodes.
     '''
 
-    nodes = mc.ls(nodes, int=True)
+    nodes = mc.ls(nodes, long=True)
     #mirrorMap = getMirrorMap(nodes)
     mirrorPairs = {}
     #for each in nodes:
@@ -1361,7 +1361,7 @@ def flipPose(nodes=None, *args):
     if not nodes:
         raise RuntimeError('No nodes provided to mirror.')
 
-    nodes = mc.ls(nodes, int=True)
+    nodes = mc.ls(nodes, long=True)
 
     flipPairs = getMirrorPairs(nodes)
     flipSingles = [x for x in nodes if x not in list(flipPairs.keys())]
@@ -1454,7 +1454,7 @@ def mirrorAnimation(nodes=None, *args):
 
 def flipAnimation(nodes, *args):
 
-    nodes = mc.ls(nodes, int=True)
+    nodes = mc.ls(nodes, long=True)
     pairs = getMirrorPairs(nodes)
     flipSingles = [x for x in nodes if x not in list(pairs.keys())]
 
