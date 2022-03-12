@@ -448,7 +448,7 @@ def getFrameRate():
     if currentUnit == 'ntscf':
         return 60
     if 'fps' in currentUnit:
-        return int(currentUnit.substitute('fps',''))
+        return int(currentUnit.replace('fps',''))
 
     return 1
 
