@@ -1,7 +1,7 @@
 # -= ml_utilities.py =-
 #                __   by Morgan Loomis
 #     ____ ___  / /  http://morganloomis.com
-#    / __ `__ \/ /  Revision 34
+#    / __ `__ \/ /  Revision 36
 #   / / / / / / /  2019-03-07
 #  /_/ /_/ /_/_/  _________
 #               /_________/
@@ -60,7 +60,7 @@
 
 __author__ = 'Morgan Loomis'
 __license__ = 'MIT'
-__revision__ = 35
+__revision__ = 36
 
 import maya.cmds as mc
 import maya.mel as mm

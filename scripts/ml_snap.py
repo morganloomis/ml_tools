@@ -21,7 +21,6 @@ def snap(node, target, translate=True, rotate=True, rotateOffset=(0,0,0)):
     args.append(dup)
     delete = [dup]
     
-    
     for a in 'tr':
         for b in 'xyz':
             mc.setAttr('{}.{}{}'.format(dup, a, b), lock=False)

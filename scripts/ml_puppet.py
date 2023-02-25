@@ -200,7 +200,9 @@ class SpaceSwitchUI(object):
         mc.showWindow(self.win_name)
         mc.window(self.win_name, edit=True, width=self.width, height=self.height)
             
-    
+def is_control(node):
+    return mc.attributeQuery(CONTROL_ATTR, exists=True, node=str(node))
+
 
 def fkIkSwitchSel(*args):
     fkIkSwitch()
@@ -1469,6 +1471,7 @@ def flipAnimation(nodes, *args):
         if node not in done:
             swapAnimation(node, mirror)
             done.append(mirror)
+
 
 
 #      ______________________
