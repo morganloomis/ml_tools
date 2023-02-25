@@ -167,8 +167,8 @@ def unparentShape(objs=None):
         objs = [objs]
 
     #are these shapes or transforms
-    transforms = list()
-    shapes = list()
+    transforms = []
+    shapes = []
     for obj in objs:
         nodeType = mc.nodeType(obj)
         if nodeType in ('mesh','nurbsCurve','nurbsSurface','locator','annotationShape'):
@@ -183,11 +183,17 @@ def unparentShape(objs=None):
             return
 
     for each in transforms:
-        childShapes = mc.listRelatives(each, shapes=True, path=True, noIntermediate=True)
-        shapes.extend([x for x in childShapes if x not in shapes])
+        childShapes = mc.listRelatives(each, shapes=True, path=True)
+        for shape in childShapes:
+            if shape in shapes:
+                continue
+            if mc.getAttr(shape+'.intermediateObject'):
+                mc.delete(shape)
+            else:
+                shapes.append(shape)
 
     #shapes that share a common parent get unparented together
-    newTransforms = dict()
+    newTransforms = {}
     for each in shapes:
         shapeParent = mc.listRelatives(each, parent=True, fullPath=True)[0]
         if not shapeParent in newTransforms:

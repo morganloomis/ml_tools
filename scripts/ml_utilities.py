@@ -2297,13 +2297,23 @@ class Vector:
         else:
             raise TypeError("Can't multiply {} with {}".format(self, other))
 
-
     def __div__(self, other):
+        '''
+        Python 2.7
+        '''
         if isinstance(other, (float,int)):
             return Vector(*[x/float(other) for x in self])
         else:
             raise TypeError("Can't divide {} by {}".format(self, other))
-
+    
+    def __truediv__(self, other):
+        '''
+        Python 3
+        '''
+        if isinstance(other, (float,int)):
+            return Vector(*[x/float(other) for x in self])
+        else:
+            raise TypeError("Can't divide {} by {}".format(self, other))
 
     def magnitude(self):
         return math.sqrt(sum([x**2 for x in self]))

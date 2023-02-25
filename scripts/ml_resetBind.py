@@ -68,10 +68,10 @@ from maya import OpenMaya
 
 def main():
 
-    sel = mc.ls(sl=True)
+    sel = mc.ls(sl=True, long=True)
 
     for each in sel:
-        shapes = mc.listRelatives(each, shapes=True)
+        shapes = mc.listRelatives(each, shapes=True, pa=True)
 
         for shape in shapes:
             #get skin cluster

@@ -178,6 +178,8 @@ class Toolbox(object):
         for folder in os.listdir(self.menusPath):
             if folder.startswith('.'):
                 continue
+            if folder.startswith('__'):
+                continue
 
             toolDirectory = posixpath.join(self.menusPath,folder)
 
@@ -264,6 +266,8 @@ class Toolbox(object):
         '''
         if not os.path.isdir(path):
             return
+        if os.path.split(path)[-1].startswith('_'):
+            return
         if not parent:
             parent = self.gMainWindow
         
@@ -309,6 +313,8 @@ class Toolbox(object):
         for each in subItems:
             eachPath = posixpath.join(path,each)
             if os.path.isdir(eachPath):
+                if each.startswith('_'):
+                    continue
                 #if its a directory, recurse
                 self.createCustomMenu(eachPath, parent=menuName, depth=depth+1)
             else:
@@ -411,7 +417,7 @@ class Tool(object):
             #find the main command to use, otherwise skip
             for f in functionList:
                 if f in self.module.__dict__:
-                    self.command = 'import '+self.module.__name__+';reload('+self.module.__name__+');'+self.module.__name__+'.'+f+'()'
+                    self.command = 'import '+self.module.__name__+';'+self.module.__name__+'.'+f+'()'
                     break
                 else:
                     self.command = 'from maya import OpenMaya;OpenMaya.MGlobal.displayWarning("No command found, make sure this tool as a main() function or that its primary function is in the functionList variable in ml_toolbox.py")'
