@@ -1,31 +1,192 @@
-
+import math, warnings
 import maya.cmds as mc
+import maya.api.OpenMaya as om
 import ml_utilities as utl
-import ml_puppet as pup
+import ml_snap
 
-
+uiUnit = om.MTime.uiUnit()
 
 def get_matrix_data(matrices, start=None, end=None):
-
+    '''
+    Should hopefully get matrix values for every frame quickly.
+    '''
     data = {}
+    start, end = utl.frameRange(start=start, end=end)
+
+    if not isinstance(matrices, (list, tuple)):
+        matrices = [matrices]
+
+    plugs = {}
     for matrix in matrices:
-        data[matrix.split('.')[0]] = mc.getAttr(matrix)
+        obj, attr = matrix.split('.')
+
+        index = None
+
+        if '[' in attr:
+            attr, x = attr.split('[')
+            index = int(x.split(']')[0])
+
+        data[matrix] = {}
+
+        mSel = om.MSelectionList()
+        mSel.add(obj)
+        node = om.MFnDependencyNode(mSel.getDependNode(0))
+        plug = node.findPlug(attr, False)
+
+        if index is not None:
+            plug.evaluateNumElements()
+            plug = plug.elementByPhysicalIndex(index)
+
+        plugs[matrix] = plug
+
+    values = []
+    for f in range(int(start), int(end+1)):
+        timeContext = om.MDGContext(om.MTime(f, uiUnit))
+        for matrix, plug in plugs.items():
+            matrixMObj = plug.asMObject(timeContext)
+            matrixData = om.MFnMatrixData(matrixMObj)
+            matrixValue = matrixData.matrix()
+            data[matrix][f] = matrixValue
 
     return data
 
+def test_matrix_data(nodes):
+
+    start, end = utl.frameRange()
+
+    data = get_matrix_data(nodes)
+
+    locators = [mc.spaceLocator(name='test_{}'.format(x))[0] for x in nodes]
+
+    for f in range(int(start), int(end+1)):
+        mc.currentTime(f)
+        for control, target in zip(locators, nodes):
+            ml_snap.set_worldMatrix(control, data[target][f])
+            mc.setKeyframe(control)
 
 
+def get_local_delta(node, targetMatrix):
+    
+    nodeWM = om.MMatrix(mc.getAttr(node+'.worldMatrix[0]'))
+    inv = om.MMatrix(targetMatrix).inverse()
+    return nodeWM * inv
 
-def match_transform(node, transform):
-    pass
+def get_control_tag(node):
+    tag = mc.listConnections(node+'.message', type='controller', source=False, destination=True)
+    if not tag:
+        return None
+    return tag[0]
 
-def match_matrix(node, matrix):
 
-    pass
+def get_systems(controls):
+    '''
+    Returns the match system for the given node.
+    '''
+
+    systems = []
+    for ctrl in controls:
+        cons = mc.listConnections(ctrl+'.message', source=False, destination=True, type='network') or []
+        for con in cons:
+            if con not in systems and mc.attributeQuery('puppeteerDataMatch', exists=True, node=con):
+                systems.append(con)
+    
+    return [MatchSystem(x) for x in systems]
+
+
+class MatchSystem(object):
+    '''
+    Manages matching for a system embedded in a puppet.
+    '''
+
+    def __init__(self, matchNode):
+
+        self.system = matchNode
+        self.driver = mc.listConnections(self.system+'.driver', source=True, destination=False, plugs=True)[0]
+        if not self.driver:
+            raise RuntimeError('No driver found for match system: {}'.format(self.system))
+
+        self._offset = []
+
+    def set_frozen(self, value):
+        mc.setAttr(self.system+'.freeze', value)
+        if not value:
+            #refresh the current frame to run the match expression
+            mc.currentTime(mc.currentTime(query=True))
+
+    @property
+    def controls(self):
+        return mc.listConnections(self.system+'.control', source=True, destination=False)
+
+    @property
+    def targets(self):
+        '''return all targets in the system'''
+        targets = []
+        for i in range(mc.getAttr(self.system+'.target', size=True)):
+            targets.append(mc.connectionInfo('{}.target[{}]'.format(self.system, i), sourceFromDestination=True))
+        return targets
+    
+    @property
+    def offsets(self):
+        '''return all targets in the system'''
+        if not self._offset:
+            size = mc.getAttr(self.system+'.offset', size=True)
+            for i,x in enumerate(self.targets):
+                if i >= size:
+                    self._offset.append([1,0,0,0, 0,1,0,0, 0,0,1,0, 0,0,0,1])
+                else:
+                    self._offset.append(mc.getAttr(self.system+'.offset[{}]'.format(i)))
+        return self._offset
+
+
+    def match_current(self, newValue):
+        '''
+        Run a match on the current frame.
+        '''
+        self.set_frozen(0)
+        matrices = [mc.getAttr(x) for x in self.targets]
+        mc.setAttr(self.driver, newValue)
+        for control, matrix, offset in zip(self.controls, matrices, self.offsets):
+            ml_snap.set_worldMatrix(control, matrix, offsetMatrix=offset)
+
+        self.set_frozen(1)
+        
+
+    def match_range(self, newValue, start=None, end=None):
+        '''
+        Match a frame range by stepping through time.
+        '''
+        
+        current = mc.currentTime(query=True)
+        start, end = utl.frameRange(start=start, end=end)
+
+        #get all the matrices for the targets in its current state
+        self.set_frozen(0)
+        matrix_data = get_matrix_data(self.targets, start=start, end=end)
+
+        #then change to the new state.
+        mc.cutKey(self.driver, time=(start, end), includeUpperBound=False)
+        mc.setKeyframe(self.driver, time=(start,end), value=newValue)
+
+        #and snap
+        with utl.IsolateViews():
+            for f in range(int(start), int(end+1)):
+                mc.currentTime(f)
+                for control, target, offset in zip(self.controls, self.targets, self.offsets):
+                    ml_snap.set_worldMatrix(control, matrix_data[target][f], offsetMatrix=offset)
+                    mc.setKeyframe(control)
+
+        self.set_frozen(1)
+        mc.currentTime(current)
+
+    def match_range_fast(self, start=None, end=None):
+        '''Match a frame range by determining keys.
+        Get matrices and determine local key values for each level of order.'''
+        pass
+
 
 class RetargetSkeleton(object):
     '''
-    Determine landmarks from a mocap skeleton.
+    Intuit landmarks from a mocap skeleton.
     '''
 
     def __init__(self, origin):
@@ -171,13 +332,6 @@ class RetargetSkeleton(object):
         pass
 
 
-
-
-
-                    
-
-        
-
 class Retarget(object):
     
     def __init__(self, fromSkeleton, toPuppet):
@@ -220,9 +374,6 @@ class Retarget(object):
         if frame:
             mc.currentTime(frame)
         
-        
-        
-
         
     def reference_duplicate(self):
         
@@ -325,8 +476,6 @@ class Retarget(object):
                 transSkip = 'none'
             if not rotSkip:
                 rotSkip = 'none'
-            
-            print 'constrain {} {}'.format(retargCtrl, resolved)
             
             constraint = mc.parentConstraint(resolved, retargCtrl, skipTranslate=transSkip, skipRotate=rotSkip)[0]
             
@@ -444,10 +593,10 @@ vector $pv = (unit($b - $mid) * $len * 0.8) + $mid;
             nodeName = node.rsplit('|')[-1].rsplit(':')[-1]
     
             if nodeName in duplicate:
-                print 'WARNING: Two or more destination nodes have the same name: '+destNS+nodeName
+                print( 'WARNING: Two or more destination nodes have the same name: '+destNS+nodeName)
                 continue
             if nodeName not in destNodeMap.keys():
-                print 'WARNING: Cannot find destination node: '+destNS+nodeName
+                print( 'WARNING: Cannot find destination node: '+destNS+nodeName)
                 continue
     
             ml_utilities.minimizeRotationCurves(node)

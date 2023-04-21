@@ -1,44 +1,61 @@
 import maya.cmds as mc
-
-def main():
-    sel = mc.ls(sl=True)
-    if not len(sel) == 2:
-        raise RuntimeError('Select a node to snap and a target.')
-    snap(sel[0], sel[1])
-    mc.select(sel[0])
-
-
-def snap(node, target, translate=True, rotate=True, rotateOffset=(0,0,0)):
+import maya.api.OpenMaya as om
+from math import isclose
+   
+def snap(node=None, target=None, offset=None):
     '''
-    Snap the transform to the position of another node
+    match one transform to another.
     '''
 
-    args = target
-    if not isinstance(target, list):
-        args = [target]
+    #target can be selection....
+    if not node and not target:
+        sel = mc.ls(sl=True)
+        if not len(sel) == 2:
+            raise RuntimeError('Select 2 nodes to snap.')
+        node, target = sel
 
-    dup = mc.duplicate(node, parentOnly=True)[0]
-    args.append(dup)
-    delete = [dup]
+    #or a matrix
+    if not(isinstance(target, (list, tuple)) and len(target) == 16):
+        target = get_worldMatrix(target) 
+
+    set_worldMatrix(node, target, offsetMatrix=offset)
+
+
+def setAttr_preserveTransform(plug, value):
+    '''snap a node to itself after changing a value'''
+    node = plug.split('.')[0]
+    matrix = get_worldMatrix(node)
+    mc.setAttr(plug, value)
+    set_worldMatrix(node, matrix)
+
+
+def get_worldMatrix(node):
+    '''
+    Fastest way to get world matrix from what I can tell
+    '''
+    selList = om.MSelectionList()
+    matrix = selList.add(node).getDagPath(0).inclusiveMatrix()
+    return [x for x in matrix]
+
+
+def set_worldMatrix(node, matrix, offsetMatrix=None, iterateTolerance=0.0001, iterationMax=4):
+    '''
+    best way to decompose and set world matrix all in one go?
+    om is faster but doesn't undo.
+    '''
+
+    if offsetMatrix:
+        matrix = [x for x in om.MMatrix(offsetMatrix) * om.MMatrix(matrix)]
     
-    for a in 'tr':
-        for b in 'xyz':
-            mc.setAttr('{}.{}{}'.format(dup, a, b), lock=False)
+    iterationMax = iterationMax or 1
 
-    if translate:
-        delete.extend(mc.pointConstraint(*args))
-    if rotate:
-        delete.extend(mc.orientConstraint(*args, offset=rotateOffset))
-
-    for a in 'tr':
-        for b in 'xyz':
-            try:
-                mc.setAttr('{}.{}{}'.format(node, a,b), mc.getAttr('{}.{}{}'.format(dup, a,b)))
-            except:
-                pass
-
-    mc.delete(delete)
+    for i in range(iterationMax):
+        mc.xform(node, matrix=matrix, worldSpace=True)
+        tryAgain = False
+        for a,b in zip(matrix, get_worldMatrix(node)):
+            if not isclose(a,b,rel_tol=iterateTolerance):
+                tryAgain = True
+                break
+        if not tryAgain:
+            return
     
-    
-if __name__ == '__main__':
-    main()
