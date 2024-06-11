@@ -127,9 +127,6 @@ try:
 except ImportError:
     pass
 
-from importlib import reload
-reload(ml_match)
-
 
 PUP_ID_PREFIX = 'pupID_'
 CONTROL_ATTR = PUP_ID_PREFIX+'control'
@@ -138,7 +135,6 @@ APPENDAGE_ATTR = 'puppeteer_appendage'
 JOINT_WORLD_MATRIX_ATTR = 'skinCluster_worldMatrix'
 
 def main():
-    #not sure why yet but running it twice seems to make it work
     initPuppetContextMenu()
     filter_graphEditor()
 
