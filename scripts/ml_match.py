@@ -1,10 +1,72 @@
 import math, warnings
 import maya.cmds as mc
+import maya.mel as mm
 import maya.api.OpenMaya as om
 import ml_utilities as utl
-import ml_snap
+import ml_snap, ml_copyAnim
+from math import isclose
+import time
 
 uiUnit = om.MTime.uiUnit()
+
+TARGET_ATTR = 'pup_matchTarget'
+TAG_ATTR = 'pup_matchTag'
+OFFSET_ATTR = 'pup_matchOffset'
+
+from importlib import reload
+reload(ml_snap)
+
+SKELETON_LOOKUP = {'Hip':['Hips'],
+                    'Chest':['Spine1'],
+                    'Neck':['Neck'],
+                    'Head':['Head'],
+                    'LeftShoulder':['LeftArm'],
+                    'RightShoulder':['RightArm'],
+                    'LeftElbow':['LeftForeArm'],
+                    'RightElbow':['RightForeArm'],
+                    'LeftHand':['LeftHand'],
+                    'RightHand':['RightHand'],
+                    'LeftHip':['LeftUpLeg'],
+                    'RightHip':['RightUpLeg'],
+                    'LeftKnee':['LeftLeg'],
+                    'RightKnee':['RightLeg'],
+                    'LeftFoot':['LeftFoot'],
+                    'RightFoot':['RightFoot']
+                    }
+
+
+SIDE_LOOKUP = ['Center','Left','Right']
+LABEL_LOOKUP = ['None',
+                'Root',
+                'Hip',
+                'Knee',
+                'Foot',
+                'Toe',
+                'Spine',
+                'Neck',
+                'Head',
+                'Collar',
+                'Shoulder',
+                'Elbow',
+                'Hand',
+                'Finger',
+                'Thumb',
+                'PropA',
+                'PropB',
+                'PropC',
+                'Other',
+                'Index Finger',
+                'Middle Finger',
+                'Ring Finger',
+                'Pinky Finger',
+                'Extra Finger',
+                'Big Toe',
+                'Index Toe',
+                'Middle Toe',
+                'Ring Toe',
+                'Pinky Toe',
+                'Foot Thumb']
+
 
 def get_matrix_data(matrices, start=None, end=None):
     '''
@@ -39,7 +101,6 @@ def get_matrix_data(matrices, start=None, end=None):
 
         plugs[matrix] = plug
 
-    values = []
     for f in range(int(start), int(end+1)):
         timeContext = om.MDGContext(om.MTime(f, uiUnit))
         for matrix, plug in plugs.items():
@@ -49,6 +110,7 @@ def get_matrix_data(matrices, start=None, end=None):
             data[matrix][f] = matrixValue
 
     return data
+
 
 def test_matrix_data(nodes):
 
@@ -65,17 +127,22 @@ def test_matrix_data(nodes):
             mc.setKeyframe(control)
 
 
+def compare_matrix(m1, m2, tol=0.001):
+    return [isclose(x1, x2, abs_tol=tol) for x1, x2 in zip(m1, m2)] == ([True] * 16)
+
+
 def get_local_delta(node, targetMatrix):
     
     nodeWM = om.MMatrix(mc.getAttr(node+'.worldMatrix[0]'))
     inv = om.MMatrix(targetMatrix).inverse()
     return nodeWM * inv
 
-def get_control_tag(node):
-    tag = mc.listConnections(node+'.message', type='controller', source=False, destination=True)
-    if not tag:
+
+def get_control_label(node):
+    label = mc.listConnections(node+'.message', type='controller', source=False, destination=True)
+    if not label:
         return None
-    return tag[0]
+    return label[0]
 
 
 def get_systems(controls):
@@ -114,6 +181,12 @@ class MatchSystem(object):
             mc.currentTime(mc.currentTime(query=True))
 
     @property
+    def dynamic(self):
+        if mc.attributeQuery('dynamic', exists=True, node=self.system):
+            return mc.getAttr(self.system+'.dynamic')
+        return False
+
+    @property
     def controls(self):
         return mc.listConnections(self.system+'.control', source=True, destination=False)
 
@@ -127,7 +200,7 @@ class MatchSystem(object):
     
     @property
     def offsets(self):
-        '''return all targets in the system'''
+        '''return offsets for all targets in the system'''
         if not self._offset:
             size = mc.getAttr(self.system+'.offset', size=True)
             for i,x in enumerate(self.targets):
@@ -136,7 +209,6 @@ class MatchSystem(object):
                 else:
                     self._offset.append(mc.getAttr(self.system+'.offset[{}]'.format(i)))
         return self._offset
-
 
     def match_current(self, newValue):
         '''
@@ -150,7 +222,6 @@ class MatchSystem(object):
 
         self.set_frozen(1)
         
-
     def match_range(self, newValue, start=None, end=None):
         '''
         Match a frame range by stepping through time.
@@ -168,217 +239,523 @@ class MatchSystem(object):
         mc.setKeyframe(self.driver, time=(start,end), value=newValue)
 
         #and snap
-        with utl.IsolateViews():
-            for f in range(int(start), int(end+1)):
-                mc.currentTime(f)
-                for control, target, offset in zip(self.controls, self.targets, self.offsets):
-                    ml_snap.set_worldMatrix(control, matrix_data[target][f], offsetMatrix=offset)
-                    mc.setKeyframe(control)
+        resetAutoKey = mc.autoKeyframe(query=True, state=True)
+        mc.autoKeyframe(state=False)
+        if not self.dynamic and not mc.ogs(query=True, pause=True):
+            mc.ogs(pause=True)
+        
+        for f in range(int(start), int(end+1)):
+            mc.currentTime(f)
+            for control, target, offset in zip(self.controls, self.targets, self.offsets):
+                ml_snap.set_worldMatrix(control, matrix_data[target][f], offsetMatrix=offset)
+                mc.setKeyframe(control)
+
+        if mc.ogs(query=True, pause=True):
+            mc.ogs(pause=True)
 
         self.set_frozen(1)
         mc.currentTime(current)
+        mc.autoKeyframe(state=resetAutoKey)
 
     def match_range_fast(self, start=None, end=None):
         '''Match a frame range by determining keys.
         Get matrices and determine local key values for each level of order.'''
         pass
 
+#######################################################
+## RETARGETTING
+#######################################################
 
-class RetargetSkeleton(object):
+def get_orientation_offset(joint, relativeMatrix=[1,0,0,0, 0,1,0,0, 0,0,1,0, 0,0,0,1]):
+    relativeMatrix = relativeMatrix[:12]+[0,0,0,1]
+    inverseMatrix = om.MMatrix(relativeMatrix).inverse()
+
+    jointMatrix = ml_snap.get_worldMatrix(joint)
+    jointMatrix = om.MMatrix(jointMatrix[:12]+[0,0,0,1])
+
+    matrix = jointMatrix * inverseMatrix
+
+    r = om.MTransformationMatrix(matrix).rotation(asQuaternion=False)
+    offset = [math.degrees(x) for x in r]
+
+
+def tag_joint(joint, side, label, offset=[0,0,0]):
+    if not mc.nodeType(joint) == 'joint':
+        raise RuntimeError(f'{joint} is not a joint.')
+    mc.setAttr(joint+'.side', SIDE_LOOKUP.index(side))
+    mc.setAttr(joint+'.type', LABEL_LOOKUP.index(label))
+
+    try:
+        mc.addAttr(joint, ln='offset', at='double3', keyable=True)
+        for x in 'XYZ':
+            mc.addAttr(joint, ln='offset'+x, at='doubleAngle', parent='offset', keyable=True)
+    except:
+        pass
+
+    mc.setAttr(joint+'.offset', *offset)
+
+
+def tag_skeleton(root):
     '''
-    Intuit landmarks from a mocap skeleton.
+    Evaluate a skeleton to apply side and type to all joints, in preparation for matching.
+    The idea is that the data about the skeleton should be encoded in the scene, rather than
+    on the fly. That allows for manual fixing of issues and support for odd skeletons.
     '''
 
-    def __init__(self, origin):
-        self.origin = origin
-        self.data = {}
-                
+    def child_joints(joint):
+        return mc.ls(mc.listRelatives(joint, f=True), type='joint')
 
-    def child_joints(self, joint):
-        return mc.ls(mc.listRelatives(joint, pa=True), type='joint')
+    def position(node):
+        return ml_snap.get_worldPosition(node)
+    
+    def child_chains_by_length(node):
+        kids = child_joints(node)
+        lengths = []
+        for kid in kids:
+            lengths.append(len(mc.listRelatives(kid, ad=True, type='joint')))
+        return [x for _,x in sorted(zip(lengths,kids))]
+    
+    def shortest_child_chain(node):
+        return child_chains_by_length(node)[0]
+    
+    def longest_child_chain(node):
+        return child_chains_by_length(node)[-1]
 
-    def position(self, node):
-        return mc.xform(node, )
-
-    def first_branching_joint(self, root, limit=2):
+    def first_branching_joint(root, limit=2):
         joint = root
-        kids = self.child_joints(joint)
+        kids = child_joints(joint)
         while kids:
             if len(kids) >= limit:
                 return joint
             joint = kids[0]
-            kids = self.child_joints(joint)
+            kids = child_joints(joint)
         return None
 
-    def leaf_joint(self, root):
+    def leaf_joint(root):
         kids = [root]
         while True:
             joint = kids[0]
-            kids = self.child_joints(joint)
+            kids = child_joints(joint)
             if not kids:
                 return joint
-
-    @property
-    def hips(self):
-        if not 'hips' in self.data.keys():
-            hips = self.first_branching_joint(self.origin)
-            if not hips:
-                raise RuntimeError('Could not determine hips.')
-            self.data['hips'] = hips
-        return self.data['hips']
-
-
-    @property
-    def chest(self):
-        if not 'chest' in self.data.keys():
-            kids = self.child_joints(self.hips)
-            #get the highest one?
-            highestValue = float('-inf')
-            highestJoint = None
-            for kid in kids:
-                value = self.position(kid)[1]
-                if value > highestValue:
-                    highestValue = value
-                    highestJoint = kid
-            joint = highestJoint
-            kids = self.child_joints(joint)
-            while kids:
-                if len(kids) > 1:
-                    #when we find a branch, that's the chest
-                    self.data['chest'] = joint
-                    break
-                joint = kids[0]
-                kids = self.child_joints(joint)
-            if not 'chest' in self.data.keys():
-                raise RuntimeError('Could not determine chest.')
-        return self.data['chest']
-
-
-    @property
-    def head(self):
-        if not 'head' in self.data.keys():
-            kids = self.child_joints(self.chest)
-            #get the chain that's the shortest?
-
-            shortestChain = 99999999999
-            joint = None
-            for kid in kids:
-                chain = mc.listRelatives(kid, ad=True, pa=True)
-                if len(chain) == 0:
-                    #early out, if there's no kids it has to be the head.
-                    self.data['head'] = kid
-                    return self.data['head']
-
-                if len(chain) < shortestChain:
-                    shortestChain = len(chain)
-                    joint = chain[0]
-            self.data['head'] = mc.listRelatives(joint, ad=True, pa=True)[-1]
-        return self.data['head']
-
-    @property
-    def LfClav(self):
-        if not 'LfClavicle' in self.data.keys():
-            kids = self.child_joints(self.chest)
-            #get the chain that's the shortest?
-
-            shortestChain = 99999999999
-            joint = None
-            for kid in kids:
-                chain = mc.listRelatives(kid, ad=True, pa=True)
-                if len(chain) == 0:
-                    #early out, if there's no kids it has to be the head.
-                    self.data['head'] = kid
-                    return self.data['head']
-
-                if len(chain) < shortestChain:
-                    shortestChain = len(chain)
-                    joint = chain[0]
-            self.data['head'] = mc.listRelatives(joint, ad=True, pa=True)[-1]
-        return self.data['head']
-
-    @property
-    def LfShoulder(self):
-        if not 'LfShoulder' in self.data.keys():
-            self.data['LfShoulder'] = self.child_joints(self.LfClavicle)[0]
-        return self.data['LfShoulder']
-
-    @property
-    def RtShoulder(self):
-        if not 'RtShoulder' in self.data.keys():
-            self.data['RtShoulder'] = self.child_joints(self.RtClavicle)[0]
-        return self.data['RtShoulder']
-
-    @property
-    def LfHand(self):
-        if not 'LfHand' in self.data.keys():
-            hand = self.first_branching_joint(self.LfShoulder)
-            if hand == None:
-                hand = self.leaf_joint(self.LfShoulder)
-            self.data['LfHand'] = hand
-        return self.data['LfHand']
-
-    @property
-    def RtHand(self):
-        if not 'LfHand' in self.data.keys():
-            hand = self.first_branching_joint(self.RtShoulder)
-            if hand == None:
-                hand = self.leaf_joint(self.RtShoulder)
-            self.data['RtHand'] = hand
-        return self.data['RtHand']
-
-    @property
-    def LfElbow(self):
-        #walk up from hand until you hit shoulder.
-        pass
-
-
-class Retarget(object):
-    
-    def __init__(self, fromSkeleton, toPuppet):
-        
-        #error checking
-        if not mc.referenceQuery(toPuppet, isNodeReferenced=True):
-            raise RuntimeError('It is required for the puppet to be referenced for retargeting to work. Create a reference and transfer animation.')
             
-        self.skeleton = fromSkeleton
-        self.puppet = toPuppet
-        self.namespace = self.get_namespace(self.puppet)
-        self.skeleton_namespace = self.get_namespace(self.skeleton)
-        refNode = mc.referenceQuery(self.puppet, referenceNode=True)
-        self.referenceFile = mc.referenceQuery(refNode, filename=True)
-        self.intermediatePuppet = None
-        self.intermediateNamespace = 'RETARGET'
-        
-        
-        #get skeleton frame range
-        allJoints = mc.listRelatives(self.skeleton, type='joint', ad=True, pa=True)
-        keyTimes = mc.keyframe(allJoints, query=True, timeChange=True)
-        if not keyTimes:
-            raise RuntimeError('Source skeleton has no animation.')
-        keyTimes = sorted(list(set(keyTimes)))
-        start = mc.playbackOptions(query=True, ast=True)
-        end = mc.playbackOptions(query=True, aet=True)
-        self.frame_range = (start, end)      
-        
-        if not refNode:
-            raise RuntimeError('The puppet must be referenced.')
-        if not self.namespace:
-            raise RuntimeError('The puppet requires a namespace.')
-        if not self.skeleton_namespace:
-            raise RuntimeError('The imported FBX requires a namespace. Please re-import, or else create a namespace and add all FBX nodes to it.')
+    def bone_length(end):
+        parent = mc.listRelatives(end, parent=True, f=True)
+        p1 = utl.Vector(*position(end))
+        if not parent:
+            return p1.magnitude()
+        p2 =  utl.Vector(*position(parent[0]))
+        vec = p1 - p2
+        return vec.magnitude()
     
-    def initialize_t_pose(self, frame=None):
-        '''
-        if the skeleton orientation is not aligned with the puppet, determine offsets here.
-        '''
-        if frame:
-            mc.currentTime(frame)
+    def chain_length(root, end):
+        totalLength = bone_length(end)
+        parent = mc.listRelatives(end, parent=True, f=True)
+        while parent and not utl.sameNode(root, parent[0]):
+            totalLength += bone_length(parent[0])
+            parent = mc.listRelatives(parent[0], parent=True, f=True)
+        return totalLength
+
+    hip = first_branching_joint(root)
+
+    #go to start frame, best chance of being a t pose.
+
+    keyTimes = mc.keyframe(hip, query=True, timeChange=True)
+    if not keyTimes:
+        raise RuntimeError('No animation on skeleton?')
+    keyTimes = sorted(list(set(keyTimes)))
+    mc.currentTime(int(keyTimes[0]))
+    mc.refresh()
+
+    #assume we're at bind pose.
+    #get the offset between this and our default spine control (world oriented)
+    #assume this same offset is continued through the spine, neck and head
+    matrix = ml_snap.get_worldMatrix(hip)
+    r = om.MTransformationMatrix(om.MMatrix(matrix[:12]+[0,0,0,1])).rotation(asQuaternion=False)
+    offset = [math.degrees(x) for x in r]
+
+    tag_joint(hip, 'Center', 'Hip', offset=offset)
+    
+
+    hipChains = child_chains_by_length(hip)
+    chest = first_branching_joint(hipChains[-1])
+    tag_joint(chest, 'Center', 'Spine', offset=offset)
+
+    chestChains = child_chains_by_length(chest)
+
+    neck = chestChains[0]
+    tag_joint(neck, 'Center', 'Neck', offset=offset)
+
+    head = None
+    if neck:
+        head = leaf_joint(neck)
+    else:
+        head = shortest_child_chain(chest)
+    tag_joint(head, 'Center', 'Head', offset=offset)
+
+    LfClav = None
+    RtClav = None
+
+    #left clav will be one of these, based which side of the chest its on?
+    chest_pos = ml_snap.get_worldPosition(chest)
+    for clav in chestChains[-2:]:
+        kid = child_joints(clav)[0]
+        position = ml_snap.get_worldPosition(kid)
+        vect = [a-b for a,b in zip(position,chest_pos)]
+        vect = utl.Vector(*position) - utl.Vector(*chest_pos)
+        vect.normalize()
+        if vect.dot(utl.Vector(1,0,0)) > 0:
+            LfClav = clav
+            break
+    
+    if LfClav == chestChains[-1]:
+        RtClav = chestChains[-2]
+    else:
+        RtClav = chestChains[-1]
+
+    tag_joint(LfClav, 'Left', 'Collar')
+    tag_joint(RtClav, 'Right', 'Collar')
+
+    for clav, side in zip([LfClav, RtClav],['Left','Right']):
+        shoulder = child_joints(clav)[0]
+        tag_joint(shoulder, side, 'Shoulder')
+
+        hand = first_branching_joint(shoulder)
+        tag_joint(hand, side, 'Hand')
+
+        elbow = child_joints(shoulder)[0]
+        tag_joint(elbow, side, 'Elbow')
+
+
+    LfHip = None
+    RtHip = None
+
+    #left clav will be one of these, based which side of the chest its on?
+    hip_pos = ml_snap.get_worldPosition(hip)
+    for each in hipChains[:2]:
+        position = ml_snap.get_worldPosition(each)
+        vect = [a-b for a,b in zip(position,hip_pos)]
+        vect = utl.Vector(*position) - utl.Vector(*hip_pos)
+        vect.normalize()
+        if vect.dot(utl.Vector(1,0,0)) > 0:
+            LfHip = each
+            break
+    
+    if LfHip == hipChains[0]:
+        RtHip = hipChains[1]
+    else:
+        RtHip = hipChains[0]
+
+    tag_joint(LfHip, 'Left', 'Hip')
+    tag_joint(RtHip, 'Right', 'Hip')
+
+    for each, side in zip([LfHip, RtHip],['Left','Right']):
+        knee = child_joints(each)[0]
+        tag_joint(knee, side, 'Knee')
+
+        foot = child_joints(knee)[0]
+        tag_joint(foot, side, 'Foot')
+
+        toe = child_joints(foot)[0]
+        tag_joint(toe, side, 'Toe')
+
+    mc.select(hip)
+    mm.eval('displayJointLabels 1;')
+
+
+class MatchSkeleton(object):
+    '''
+    Skeleton representation, no puppet.
+    Relies on pre-tagged joints, using the standard .type and .side attributes of joints
+    '''
+    sides = ['','Right','Left']
+
+    def __init__(self, origin):
+
+        #check that skeleton is tagged, and tag if not.
+
+        self.origin = origin
+        self.namespace = utl.getNamespace(origin)
+
+        #data is formatted like this:
+        self.data = {} 
+        self._joints = []
+        self._targets = {}
+        self._matrixData = {}
+        self._startFrame = None
+        self._endFrame = None
+        self._targets = []
+        self._tags = {}
+
+    @property
+    def joints(self):
+        if not self._joints:
+            self._joints = mc.ls(mc.listRelatives(self.origin, f=True, ad=True), type='joint')
+            self._joints.append(self.origin)
+        return self._joints
+    
+    def get_joint(self, name):
+        if self.namespace:
+            name = self.namespace+':'+name
+        joint = mc.ls(name)
+        if joint:
+            return joint[0]
+    
+    def find_joint(self, label, side):
+        key = (label, side)
+        if key in self._tags.keys():
+            return self._tags[key]
         
+        for joint in self.joints:
+            t = mc.getAttr(f'{joint}.type')
+            if t == 0:
+                continue
+            s = mc.getAttr(f'{joint}.side')
+            self._tags[(LABEL_LOOKUP[t], SIDE_LOOKUP[s])] = joint
+            if t == label and s == side:
+                return joint
+
+    def get_target(self, label, side):
+        '''
+        This is the main method for getting a target joint in a skeleton
+        '''
+        joint = self.find_joint(label, side)
+
+        if not joint:
+            return None
+        #need to determine orientation offset?
+        return TargetTransform(node=joint)
+    
+    @property
+    def target_nodes(self):
+        return [x.node for x in self._targets.values()]
+
+    def matrix_data(self):
+        return get_matrix_data(self.target_nodes, start=self.start_frame, end=self.end_frame)
+
+    def frame_range(self):
+        if not self._startFrame:
+            keyTimes = mc.keyframe(self.joints, query=True, timeChange=True)
+            if not keyTimes:
+                return None
+            keyTimes = sorted(list(set(keyTimes)))
+            self._startFrame = int(keyTimes[0])
+            self._endFrame = int(keyTimes[-1])
+        return self._startFrame, self._endFrame
+
+    def start_frame(self):
+        return self.frame_range()[0]
+    
+    def end_frame(self):
+        return self.frame_range()[1]
+    
+
+
+class MatchPuppet(object):
+
+    def __init__(self, namespace):
+        self.namespace = namespace
+        self._refNode = None
+        self._topNode = None
+        self._controls = None
+        self._appendages = None
+        self._ordered_controls = None
+        self._matchable_controls = None
+        self._systems = None
+        
+    @property
+    def controls(self):
+        #this is yanked from ml_puppet (cyclical import otherwise)
+        if not self._controls:
+            self._controls = mc.ls('{}:*.pupID_control'.format(self.namespace), o=True)
+        return self._controls
+    
+    @property
+    def appendages(self):
+        #this is yanked from ml_puppet (cyclical import otherwise)
+        if not self._appendages:
+            self._appendages = mc.ls('{}:*.puppeteer_appendage'.format(self.namespace), o=True, long=True)
+        return self._appendages
+    
+    @property
+    def topNode(self):
+        if not self._topNode:
+            pups = mc.ls('{}:*.pupID_puppet'.format(self.namespace), o=True)
+            if not pups:
+                warnings.warn('No top node attribute detected in namespace, or namespace is incorrect.')
+            else:
+                self._topNode = pups[0]
+        return self._topNode
+                
+    @property
+    def refNode(self):
+        if not self._refNode:
+            self._refNode = mc.referenceQuery(self.controls[0], referenceNode=True)
+        return self._refNode
+    
+    @property
+    def refFile(self):
+        return mc.referenceQuery(self.refNode, filename=True)
+    
+    @property
+    def root(self):
+        return self.control('root_ctrl')
+    
+    @property
+    def systems(self):
+        if not self._systems:
+            self._systems = get_systems(self.controls)
+        return self._systems
+    
+    @property
+    def fk_ik_systems(self):
+        return [s for s in self.systems if s.driver.endswith('.fk_ik')]
+
+    def control(self, name):
+        return self.namespace+':'+name
+    
+    def swap_reference(self, newFile):
+        mc.file(newFile, loadReference=self.refNode)
+
+    def remove_reference(self):
+        refNode = self.refNode
+        mc.file(removeReference=True, referenceNode=refNode)
+        if mc.objExists(refNode):
+            mc.lockNode(refNode, lock=False)
+            mc.delete(refNode)
+
+    def upstream_appendage(self, appendage):
+        
+        opm = mc.listConnections(f'{appendage}.offsetParentMatrix', source=True, destination=False)
+        if not opm:
+            parent =  mc.listRelatives(appendage, parent=True)
+            if parent:
+                return parent[0]
+            return None
+        
+        upstream = None
+        history = mc.ls(mc.listHistory(opm, breadthFirst=True), type='transform', long=True)
+        history_control = None
+        for each in history:
+            if each == appendage:
+                continue
+            if mc.attributeQuery('puppeteer_appendage', node=each, exists=True):
+                upstream = each
+                break
+            if not history_control and mc.attributeQuery('pupID_control', node=each, exists=True):
+                history_control = each
+
+        if not upstream and history_control:
+            #get appendage above this control.
+            while history_control:
+                if not '|' in history_control:
+                    break
+                history_control = history_control.rsplit('|',1)[0]
+                if not mc.objExists(history_control):
+                    break
+                if mc.attributeQuery('puppeteer_appendage', node=history_control, exists=True):
+                    upstream = history_control
+                    break
+        return upstream
+    
+    def ordered_appendages(self):
+        '''
+        All appendages in order of execution.
+        '''
+        ordered_appendages = self.appendages[:]
+        for appendage in self.appendages:
+            ordered_appendages.remove(appendage)
+            upstream = self.upstream_appendage(appendage)
+            if not upstream or upstream not in ordered_appendages:
+                ordered_appendages.insert(0, appendage)
+            else:
+                ordered_appendages.insert(ordered_appendages.index(upstream)+1, appendage)
+        return ordered_appendages
+    
+    def ordered_controls(self):
+        '''
+        get all controls in estimated evaluation order.
+        Top node is top, followed by controls directly underneath (root)
+        Then order appendages based on their skeletal connections.
+        Then order controls under each appendage based on if they have other 
+        local controls in their upstream history.
+        '''
+
+        if self._ordered_controls:
+            return self._ordered_controls
+
+        def controls_below(node, nodeList=[]):
+            '''
+            '''
+            kids = mc.listRelatives(node, f=True) or []
+            for kid in kids:
+                if not mc.listAttr(kid, keyable=True):
+                    break
+                if mc.attributeQuery('puppeteer_appendage', node=kid, exists=True):
+                    break
+                if mc.attributeQuery('pupID_control', node=kid, exists=True):
+                    nodeList.append(kid)
+                nodeList = controls_below(kid, nodeList)
+            return nodeList
+        
+        #first ordred controls are always topnode and anything directly under it (root)
+        ordered_controls = [self.topNode]
+        ordered_controls.extend(controls_below(self.topNode, []))
+        
+        #now order controls in appendages
+        for appendage in self.ordered_appendages():
+            ordered = controls_below(appendage, [])
+            if not ordered:
+                continue
+            if len(ordered) == 1:
+                ordered_controls.append(ordered[0])
+                continue
+
+            for control in ordered[:]:
+                opm = mc.listConnections(f'{control}.offsetParentMatrix', source=True, destination=False)
+                if not opm:
+                    continue
+
+                for each in mc.ls(mc.listHistory(opm, breadthFirst=True), type='transform', long=True):
+                    if each == control:
+                        continue
+                    if each in ordered:
+                        ordered.remove(control)
+                        ordered.insert(ordered.index(each)+1, control)
+                        break
+
+            ordered_controls.extend(ordered)
+        
+        self._ordered_controls = ordered_controls
+        return self._ordered_controls
+
+    def matchable_controls(self):
+
+        if self._matchable_controls:
+            return self._matchable_controls
+        
+        controls = []
+        for control in self.ordered_controls():
+            if not mc.attributeQuery('pup_matchLabel', node=control, exists=True):
+                continue
+            label = mc.getAttr(f'{control}.pup_matchLabel')
+            if not label:
+                continue
+            side = mc.getAttr(f'{control}.pup_matchSide')
+            aim = 'y'
+            #making orientation assumption here, because it's our puppet.
+            if side == -1:
+                aim = '-y'
+            mt = MatchTransform(control)
+            controls.append(mt)
+        self._matchable_controls = controls
+        return self._matchable_controls
+    
         
     def reference_duplicate(self):
         
         pre = mc.ls(assemblies=True)
-        mc.file(self.referenceFile, reference=True, namespace=self.intermediateNamespace)
+        mc.file(self.refFile, reference=True, namespace=self.intermediateNamespace)
         post = mc.ls(assemblies=True)
         self.intermediatePuppet = [x for x in post if x not in pre][0]
         
@@ -387,10 +764,7 @@ class Retarget(object):
         if parent:
             self.intermediatePuppet = mc.parent(self.intermediatePuppet, parent[0])[0]
         
-        source = mc.listRelatives(self.puppet, parent=True)
-        destination = mc.listRelatives(self.intermediatePuppet, pa=True, ad=True)
-        
-        for src in self.all_controls(self.puppet):
+        for src in self.all_controls():
             dst = src.replace(self.namespace, self.intermediateNamespace)
             if not mc.objExists(dst):
                 warnings.warn('Warning! Puppets do not match. Control not found: {}'.format(dst))
@@ -404,230 +778,457 @@ class Retarget(object):
                     mc.setAttr('{}.{}'.format(dst, attr), *value[0])
                 else:
                     mc.setAttr('{}.{}'.format(dst, attr), value)
+
+
+class TargetTransform(object):
+    '''
+    A maya transform with methods for determining orientation and comparing with others
+    '''
+    sides = ['','Left','Right']
     
-    
-    def all_controls(self, puppet):
-        nodes = mc.listRelatives(puppet, pa=True, ad=True)
-        controls = [x for x in nodes if x.endswith('_Ctrl')]
-        additional = ['controls_god_C']
-        for each in additional:
-            controls.append(self.get_namespace(puppet)+':'+each)
-        if not controls:
-            raise RuntimeError('No controls found in puppet: {}'.format(puppet))
-        return controls
-    
-    def get_node(self, node, puppet):
-        return '{}:{}'.format(self.get_namespace(puppet), node)
+    def __init__(self, node):
+        if not node:
+            raise RuntimeError('No node')
+        self.node = node
+        self.target = None
         
-    def mapped_controls(self, puppet):
-        return [self.get_namespace(puppet)+':'+x for x in MAP.keys()]
+    @property
+    def name(self):
+        return self.node.split('|')[-1].split(':')[-1]
     
-    
-    def retarget_controls(self):
-        for control in MAP.keys():
-            self.process_control(control)
+    @property
+    def label(self):
+        try:
+            return mc.getAttr(f'{self.node}.pup_matchLabel')
+        except: pass
+        if mc.nodeType(self.node) == 'joint':
+            return mc.getAttr(f'{self.node}.type', asString=True)
+
+    @property
+    def side(self):
+        try:
+            return SIDE_LOOKUP[mc.getAttr(f'{self.node}.pup_matchSide')]
+        except: pass
+        if mc.nodeType(self.node) == 'joint':
+            return mc.getAttr(f'{self.node}.side', asString=True)
         
+    def worldMatrix(self):
+        return ml_snap.get_worldMatrix(self.node)
+    
+    def worldPosition(self):
+        return ml_snap.get_worldPosition(self.node)
+
+    @property
+    def aim_axis(self):
+        if self._aim_axis:
+            return self._aim_axis
+        
+        compare = mc.listRelatives(self.node) or []
+        invert = -1
+        if not compare:
+            compare.extend(mc.listRelatives(self.node, parent=True) or [])
+            invert = 1
+
+        if not compare:
+            self._aim_axis = utl.Vector(0,1,0)
+            return self._aim_axis
+        
+        matrix = self.matrix()
+        nodeWM = om.MMatrix(matrix)
+        
+        allAxis = [utl.Vector(1,0,0),utl.Vector(0,1,0),utl.Vector(0,0,1)]
+        allAxis = allAxis + [x*-1 for x in allAxis]
+
+        highestDot = -2
+        for each in compare:
+            inv = om.MMatrix(ml_snap.get_worldMatrix(each)).inverse()
+            localMatrix = nodeWM * inv
+            localPoint = utl.Vector(localMatrix[12],localMatrix[13],localMatrix[14])
+            if localPoint.magnitude == 0:
+                continue
+            localPoint.normalize()
+            localPoint = localPoint * invert
             
-    def process_control(self, control):
+            for a in allAxis:
+                dot = localPoint.dot(a)
+                if dot > highestDot:
+                    highestDot = dot
+                    self._aim_axis = a
+                if dot == 1:
+                    break
+
+        return self._aim_axis
+
+
+class MatchTransform(TargetTransform):
+    '''
+    A maya transform with methods for determining orientation and comparing with others
+    '''
+    sides = ['','Left','Right']
+    
+    def __init__(self, node):
+        super(MatchTransform, self).__init__(node)
         
-        retargCtrl = 'RETARGET:' + control
-        data = MAP[control]
+    def get_target(self, targetSystem):
+
+        if not isinstance(targetSystem, MatchSkeleton):
+            raise RuntimeError(f'{type(targetSystem)} not supported, no target found.')
+
+        joint = None
+        #look for a target in three ways. First based on explicit connection
+        if mc.attributeQuery('pup_matchTarget', node=self.node, exists=True):
+            targetName = mc.getAttr(f'{self.node}.pup_matchTarget')
+            if targetName:
+                joint = targetSystem.get_joint(targetName)
+
+        if not joint and self.name.endswith('_ctrl'):
+            # second based on name, assuming the same skeleton
+            #basically if we ditch the _ctrl suffix and there's a joint with the same name.
+            joint = mc.ls(self.name.replace('_ctrl',''), type='joint')
+        if joint:
+            if len(joint) > 1:
+                raise RuntimeError(f'More than one joint matches name: {self.name}')
+            self.target = joint[0]
+            return True
+
+        self.target = targetSystem.get_target(self.label, self.side)
+        return bool(self.target)
+
+    def match(self):
+        if not self.target:
+            raise RuntimeError(f'{self.node} has no target')
         
-        if 'constrain' in data.keys():
-            if 'rotateOrder' in data.keys():
-                ros = ['xyz', 'yzx','zxy','xzy','yxz','zyx']
-                if data['rotateOrder'] not in ros:
-                    raise RuntimeError('Invalid rotate order data.')
+        ml_snap.snap(self.node, self.target.node, offset=self.target_delta, position=False, iterationMax=1)
+
+
+    def constrain(self, orient=True, point=False, maintainOffset=False, layer=None):
+        if not self.target:
+            raise RuntimeError(f'{self.node} has no target')
+        
+        #get the offset
+        if orient:
+            mc.orientConstraint(self.target.node, self.node, maintainOffset=maintainOffset)
+
+    
+    def delta_matrix(self, other):
+
+        if not isinstance(other, MatchTransform):
+            raise TypeError('Must align to another MatchTransform object.')
+        #build an offset matrix based on the difference between the two vectors
+
+        angle = math.acos(self.aim_axis.dot(other.aim_axis)) * -1
+        axis = self.aim_axis.cross(other.aim_axis).normalized()
+
+        # Step 2: Compute the components of the rotation matrix
+        cos_theta = math.cos(angle)
+        sin_theta = math.sin(angle)
+        one_minus_cos = 1 - cos_theta
+
+        # Construct the rotation matrix
+        rot_matrix = [
+            cos_theta + axis[0] ** 2 * one_minus_cos,
+            axis[0] * axis[1] * one_minus_cos - axis[2] * sin_theta,
+            axis[0] * axis[2] * one_minus_cos + axis[1] * sin_theta,
+            0,
+
+            axis[0] * axis[1] * one_minus_cos + axis[2] * sin_theta,
+            cos_theta + axis[1] ** 2 * one_minus_cos,
+            axis[1] * axis[2] * one_minus_cos - axis[0] * sin_theta,
+            0,
+
+            axis[0] * axis[2] * one_minus_cos - axis[1] * sin_theta,
+            axis[1] * axis[2] * one_minus_cos + axis[0] * sin_theta,
+            cos_theta + axis[2] ** 2 * one_minus_cos,
+            0,
+
+            0,0,0,1
+        ]
+
+        return rot_matrix
+
+    @property
+    def target_delta(self):
+        if not self._target_delta:
+            if not self.target:
+                raise RuntimeError('No target set yet.')
+            matrix = om.MMatrix(self.orientationMatrix).inverse() * om.MMatrix(self.target.orientationMatrix)
+            self._target_delta = [x for x in matrix]
+        return self._target_delta
+
+    def axis(self, a):
+        result = [0,0,0]
+        for i,x in enumerate('xyz'):
+            if x in a:
+                result[i] = -1 if a.startswith('-') else 1
+        return utl.Vector(*result)
+    
+    @property
+    def orientationMatrix(self):
+        # we're only using this matrix to get a difference between two orientations. 
+        # It's meaningless by itself, just an abstract representation of orientation.
+        # aim aligns to the x axis, up aligns to the y axis.
+        
+        aim = self.axis(self.aim)
+        up = self.axis(self.up)
+        c = aim.cross(up)
+
+        return [aim[0], aim[1], aim[2], 0,
+                up[0],  up[1],  up[2], 0,
+                c[0],   c[1],   c[2], 0,
+                0,0,0,1]
+                
+    def offset(self, other):
+        return self.orientationMatrix * other.orientationMatrix.inverse()
+
+    def initialize_delta(self, position=False):
+        '''
+        Set an arbitrary offset between this control and the target on the current frame.
+        '''
+        if not self.target:
+            raise RuntimeError('No target set yet.')
+        mc.refresh()
+        matrix = om.MMatrix(self.worldMatrix()).inverse() * om.MMatrix(self.target.worldMatrix()).inverse()
+        matrix = [x for x in matrix]
+        if not position:
+            matrix[12] = 0
+            matrix[13] = 0
+            matrix[14] = 0
+            matrix[15] = 1
+
+        self._target_delta = matrix
+    
+    
+def joint_axis(joint):
+    kids = mc.listRelatives(joint, type='joint', f=True)
+    for kid in kids:
+        translate = mc.getAttr(kid+'.translate')[0]
+
+        if abs(sum(translate)) < 0.01:
+            continue
+
+        absTrans = [abs(x) for x in translate]
+        index = absTrans.index(max(absTrans))
+
+        axis = [0,0,0]
+        axis[index] = 1 if translate[index] > 0 else -1
+
+
+def reference_swap_match(namespace, newPath, skipMatch=[], debug=False):
+    #create a duplicate of the reference.
+    #match all controls to new, higher version puppet, baked on ones
+    #update old reference to new reference.
+    #compare all controls hierarchically, starting at top node.
+    #    if match, skip
+    #    if constrained or connected, skip
+    #    if in a layer, add a new offset layer? (skip for starters)
+    #    if not match, transfer anim. Check match again.
+    #       if not match again, do a per-frame snap
+
+    #get the reference path of the existing puppet
+    pup = MatchPuppet(namespace)
+    
+    #reference the new path.
+    temp = 'TEMP'
+    namespaces = mc.namespaceInfo(listOnlyNamespaces=True, recurse=True)
+    i = 1
+    while temp in namespaces:
+        temp = '{}{}'.format(temp,i)
+        i+=1
+    mc.file(newPath, r=True, namespace=temp, mergeNamespacesOnClash=True)
+    tempPup = MatchPuppet(temp)
+
+    match_puppet_to_puppet(namespace, temp, skipMatch=skipMatch)
+
+    if not debug:
+        #update the first puppet to the same file.
+        pup.swap_reference(newPath)
+
+        #copy animation to first puppet
+        ml_copyAnim.copyHierarchy(tempPup.topNode, pup.topNode, rotateOrder=True)
+
+        tempPup.remove_reference()
+    
+
+def match_puppet_to_puppet(sourceNS, destinationNS, skipMatch=[]):
+    '''
+    Match a puppet to another puppet of the same kind, accounting for minor differences.
+    '''
+    #compare all controls hierarchically, starting at top node.
+    #    if match, skip
+    #    if constrained or connected, skip
+    #    if in a layer, add a new offset layer? (skip for starters)
+    #    if not match, transfer anim. Check match again.
+    #       if not match again, do a per-frame snap
+
+    result = []
+
+    if not isinstance(skipMatch, (list,tuple)):
+        skipMatch = [skipMatch]
+
+    src_pup = MatchPuppet(sourceNS)
+    dst_pup = MatchPuppet(destinationNS)
+
+    controls = dst_pup.ordered_controls()
+
+    #copy pose
+    for control in controls:
+        controlName = control.rsplit(':', 1)[-1]
+        srcControl = sourceNS+':'+controlName
+        if not mc.objExists(srcControl):
+            continue
+        ml_snap.copy_values(srcControl, control)
+
+    #copy animation
+    ml_copyAnim.copyHierarchy(src_pup.topNode, dst_pup.topNode, rotateOrder=False)
+
+    #now check for mismatches after copying
+    match_controls = []
+    for dest_ctrl in controls:
+        shortName = dest_ctrl.rsplit(':',1)[-1]
+
+        if shortName in skipMatch:
+            result.append(f'Skipping: {shortName}')
+            continue
+
+        src_ctrl = mc.ls(f'{sourceNS}:{shortName}', long=True)
+        
+        if not src_ctrl:
+            result.append(f'No Match: {shortName}')
+            continue
+
+        src_ctrl = src_ctrl[0]
+
+        #is this a transformable control:
+        attrs = mc.listAttr(dest_ctrl, keyable=True)
+        if not [x for x in attrs if 'translate' in x or 'rotate' in x]:
+            continue
+
+        #check worldspace position
+        src_ws = ml_snap.get_worldMatrix(src_ctrl)
+        dest_ws = ml_snap.get_worldMatrix(dest_ctrl)
+
+        if compare_matrix(src_ws, dest_ws):
+            continue
+        
+        match_controls.append([src_ctrl, dest_ctrl])
+
+    if not match_controls:
+        return
+    
+    #now walk through the frame range to do the match for anything that didn't transfer
+
+    current = mc.currentTime(query=True)
+    start = current
+    end = current
+    keyTimes = mc.keyframe([x[0] for x in match_controls], query=True, timeChange=True)
+    if keyTimes:
+        keyTimes = sorted(list(set(keyTimes)))
+        start = int(keyTimes[0]-0.5)
+        end = int(keyTimes[-1]+1)
+
+    #match everything on the first frame to pare down the list again.
+    mc.currentTime(start)
+    final_match = []
+    for src_ctrl, dest_ctrl in match_controls:
+        
+        src_ws = ml_snap.get_worldMatrix(src_ctrl)
+        dest_ws = ml_snap.get_worldMatrix(dest_ctrl)
+        if compare_matrix(src_ws, dest_ws):
+            continue
+        ml_snap.set_worldMatrix(dest_ctrl, src_ws)
+        mc.setKeyframe(dest_ctrl)
+        final_match.append([src_ctrl, dest_ctrl])
+
+    for each in final_match:
+        result.append('Force Match: {}'.format(each[1]))
+        for a in 'tr':
+            for b in 'xyz':
                 try:
-                    rotInd = ros.index(data['rotateOrder'])
-                    mc.setAttr('{}.rotateOrder'.format(retargCtrl), rotInd)
-                    mc.setAttr('{}.rotateOrder'.format(self.get_node(control, self.puppet)), rotInd)
+                    mc.cutKey('{}.{}{}'.format(each[1], a, b))
                 except:
                     pass
-            #error check target, this should be fixed so there's no name issues in the puppet
-            resolved = self.skeleton_namespace + ':' + data['constrain']
-            
-            transAttr = mc.listAttr(retargCtrl, keyable=True, unlocked=True, string='translate*') or []
-            rotAttr = mc.listAttr(retargCtrl, keyable=True, unlocked=True, string='rotate*') or []
-            scaleAttr = mc.listAttr(retargCtrl, keyable=True, unlocked=True, string='scale*') or []
-        
-            rotSkip = []
-            transSkip = []
-            for axis in ['x','y','z']:
-                if not 'translate'+axis.upper() in transAttr:
-                    transSkip.append(axis)
-                if not 'rotate'+axis.upper() in rotAttr:
-                    rotSkip.append(axis)
-            
-            #add skip attrs from data
-            if 'skip' in data.keys():
-                for attr in data['skip']:
-                    if len(attr) != 2:
-                        raise RuntimeError('Retarget data problem. Skip attrs should be in format "tx"')
-                    if attr[0] == 't':
-                        if not attr[1] in transSkip:
-                            transSkip.append(attr[1])
-                    if attr[0] == 'r':
-                        if not attr[1] in rotSkip:
-                            rotSkip.append(attr[1])
+
+    for f in range(start+1, end):
+        mc.currentTime(f)
+        for src_ctrl, dest_ctrl in final_match:
+            src_ws = ml_snap.get_worldMatrix(src_ctrl)
+            ml_snap.set_worldMatrix(dest_ctrl, src_ws)
+            mc.setKeyframe(dest_ctrl)
+
+    mc.currentTime(current)
+    print('== RESULT ====================')
+    for line in result:
+        print(line)
+
+
+def retarget_puppet_to_puppet():
+    pass
+
+def match_puppet_to_skeleton():
+    pass
+
+def retarget_puppet_to_skeleton(namespace, skeleton, startFrame=None, endFrame=None, constrain=False):
+    
+    puppet = MatchPuppet(namespace)
+    skeleton = MatchSkeleton(skeleton)
+
+    for control in puppet.matchable_controls():
+        control.get_target(skeleton)
+
+    for system in puppet.fk_ik_systems:
+        mc.setAttr(system.driver, 0)
+
+    mc.currentTime(skeleton.start_frame())
+    for control in puppet.matchable_controls():
+        if control.label == 'Foot':
+            control.initialize_delta()
+
+    startFrame = startFrame or skeleton.start_frame()
+    endFrame = endFrame or skeleton.end_frame()
+
+    with utl.IsolateViews():
+        for f in range(startFrame, endFrame):
+            mc.currentTime(f)
+
+            #do the root control orientation first. Only RY
+            lf_hip = utl.Vector(*ml_snap.get_worldPosition(skeleton.LeftHip))
+            rt_hip = utl.Vector(*ml_snap.get_worldPosition(skeleton.RightHip))
+            p = (lf_hip + rt_hip) / 2
+            x = lf_hip - rt_hip
+            x.normalize()
+            z = x.cross(utl.Vector(0,1,0))
+            root_matrix = [x[0],x[1],x[2],0, 
+                            0,1,0,0, 
+                            z[0],z[1],z[2],0, 
+                            p[0],p[1],p[2],1 ]
+            ml_snap.set_worldMatrix(puppet.root, root_matrix)
+            mc.setKeyframe(puppet.root)
+
+            lowestY = float('inf')
+            lowestTarget = None
+            lowestControl = None
+            for control in puppet.matchable_controls():
+                if not control.target:
+                    continue
                 
-        
-            if not transSkip:
-                transSkip = 'none'
-            if not rotSkip:
-                rotSkip = 'none'
-            
-            constraint = mc.parentConstraint(resolved, retargCtrl, skipTranslate=transSkip, skipRotate=rotSkip)[0]
-            
-            if 'offset' in data.keys():
-                offsetAttrs = []
-                for a in ['Translate','Rotate']:
-                    for b in 'XYZ':
-                        offsetAttrs.append('{}.target[0].targetOffset{}{}'.format(constraint,a,b))
-                
-                for i, attr in enumerate(offsetAttrs):
-                    mc.setAttr(attr, data['offset'][i])
+                control.match()
+                mc.setKeyframe(control.node+'.rotate')
                     
-        if 'pv' in data.keys():
-            a,b,c = data['pv']
-            loc = mc.spaceLocator(name = CLEANUP_PREFIX+'_PV#')[0]
-            
-            #temp expression to place the polevectors during playback
-            expression = '''
-vector $a = `xform -q -ws -rp {ns}:{a}`;
-vector $b = `xform -q -ws -rp {ns}:{b}`;
-vector $c = `xform -q -ws -rp {ns}:{c}`;
-float $len = mag($a-$b) + mag($b-$c);
-vector $mid = $a * 0.5 + $c * 0.5;
-vector $pv = (unit($b - $mid) * $len * 0.8) + $mid;
-{loc}.tx = $pv.x;
-{loc}.ty = $pv.y;
-{loc}.tz = $pv.z;
-'''.format(a=a, b=b, c=c, loc=loc, ns=self.skeleton_namespace)
-            mc.expression( s=expression, name=CLEANUP_PREFIX + '_EXPRESSION' )
-            mc.pointConstraint(loc, retargCtrl)
-        
-        
-    def bake(self):
-        controls = self.mapped_controls(self.intermediatePuppet)
-        
-        with ml_utilities.IsolateViews():
-            mc.bakeResults(controls, time=(self.frame_range[0],self.frame_range[1]), sampleBy=1, preserveOutsideKeys=False, simulation=True)        
-        
-        #delete constraints
-        for control in controls:
-            cons = mc.listRelatives(control, type='constraint')
-            if not cons:
-                continue
-            for con in cons:
-                if not mc.referenceQuery(con, isNodeReferenced=True):
-                    mc.delete(con)
-                    
-    def adjust_root(self, puppet):
-        '''
-        bake root into each fk foot space.
-        transform fk foot position to ik foot position
-        blend root
-        '''
-        
-        l_root = mc.createNode('transform', name=CLEANUP_PREFIX+'l_root')
-        l_foot = mc.createNode('transform', name=CLEANUP_PREFIX+'l_foot')
-        r_root = mc.createNode('transform', name=CLEANUP_PREFIX+'r_root')
-        r_foot = mc.createNode('transform', name=CLEANUP_PREFIX+'r_foot')
-        root = mc.createNode('transform', name=CLEANUP_PREFIX+'root')
-        
-        l_root = mc.parent(l_root, l_foot)[0]
-        r_root = mc.parent(r_root, r_foot)[0]
-        
-        pup_root = self.get_node('C_spine01_Ctrl', puppet)
-        
-        cons = []
-        
-        cons.extend(mc.pointConstraint(self.get_node('lf_fk_ankle_01_Ctrl', puppet), l_foot))
-        cons.extend(mc.pointConstraint(self.get_node('rt_fk_ankle_01_Ctrl', puppet), r_foot))
-        cons.extend(mc.pointConstraint(pup_root, l_root))
-        cons.extend(mc.pointConstraint(pup_root, r_root))
-        
-        mc.pointConstraint(l_root, r_root, root)
 
-      
-        with ml_utilities.IsolateViews():
-            mc.bakeResults([l_root, r_root], time=(self.frame_range[0],self.frame_range[1]), sampleBy=1, preserveOutsideKeys=False, simulation=True)        
+def constrain_puppet_to_skeleton(namespace, skeleton, startFrame=None, endFrame=None, constrain=False):
+    
+    puppet = MatchPuppet(namespace)
+    skeleton = MatchSkeleton(skeleton)
 
-        
-        mc.delete(cons)
-        
-        cons.extend(mc.pointConstraint(self.get_node('foot_l', self.skeleton), l_foot))
-        cons.extend(mc.pointConstraint(self.get_node('foot_r', self.skeleton), r_foot))
-        
-        cons = mc.pointConstraint(root, pup_root)
+    for system in puppet.fk_ik_systems:
+        mc.setAttr(system.driver, 0)
 
-        with ml_utilities.IsolateViews():
-            mc.bakeResults([pup_root], time=(self.frame_range[0],self.frame_range[1]), sampleBy=1, preserveOutsideKeys=False, simulation=True)        
-
-        
-        mc.delete(cons)
-        mc.delete(l_foot, r_foot)
-        
+    mc.currentTime(skeleton.start_frame())
+    startFrame = startFrame or skeleton.start_frame()
+    endFrame = endFrame or skeleton.end_frame()
     
-    def copy_animation(self):
-        
-        keyed = self.mapped_controls(self.intermediatePuppet)
-    
-        #get a list of all nodes under the destination
-        allDestNodes = self.mapped_controls(self.puppet)
-    
-        destNodeMap = {}
-        duplicate = []
-        for each in allDestNodes:
-            name = each.rsplit('|')[-1].rsplit(':')[-1]
-            if name in duplicate:
-                continue
-            if name in destNodeMap.keys():
-                duplicate.append(name)
-                continue
-            destNodeMap[name] = each
-    
-        for node in keyed:
-            #strip name
-            nodeName = node.rsplit('|')[-1].rsplit(':')[-1]
-    
-            if nodeName in duplicate:
-                print( 'WARNING: Two or more destination nodes have the same name: '+destNS+nodeName)
-                continue
-            if nodeName not in destNodeMap.keys():
-                print( 'WARNING: Cannot find destination node: '+destNS+nodeName)
-                continue
-    
-            ml_utilities.minimizeRotationCurves(node)
-            mc.copyKey(node)
-            mc.pasteKey(destNodeMap[nodeName], option='replaceCompletely')
-
-    
-    def cleanup(self):
-        refNode = mc.referenceQuery(self.intermediatePuppet, referenceNode=True)
-        refFile = mc.referenceQuery(refNode, filename=True)
-        mc.file(refFile, removeReference=True)
-        remove = mc.ls(CLEANUP_PREFIX+'*')
-        for each in remove:
-            try:
-                mc.delete(each)
-            except:
-                pass
-            
-    def get_namespace(self, node):
-        if not ':' in str(node):
-            return ''
-        return node.rsplit('|',1)[-1].rsplit(':',1)[0]
-    
-    def get_joint(self, control):
-        joint = self.get_data(control, 'target')
-        if not joint:
-            return None
-        target = self.skeleton_namespace+joint
-        #this might not be needed if data is clean
-        if not mc.nodeType(target) == 'joint':
-            target = self.skeleton_namespace+joint+'1'
-            
-        return target
-    
+    for control in puppet.matchable_controls():
+        target = control.get_target(skeleton)
+        if target:
+            print(f'{control.node.split("|")[-1]} \t-> {control.target.node}')
+            control.constrain()

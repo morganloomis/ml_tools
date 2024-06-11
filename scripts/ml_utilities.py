@@ -65,6 +65,7 @@ __revision__ = 36
 import maya.cmds as mc
 import maya.mel as mm
 from maya import OpenMaya
+import maya.api.OpenMaya as om
 from functools import partial
 import shutil, os, re, sys, math
 
@@ -695,6 +696,14 @@ def longestCommonSubstring(data):
                     if found:
                         substr = data[0][i:i+j]
     return substr
+
+
+def sameNode(a, b):
+    a = mc.ls(a, long=True)
+    b = mc.ls(b, long=True)
+    if not a or not b:
+        return False
+    return a == b
 
 
 def matchBake(source=None, destination=None, bakeOnOnes=False, maintainOffset=False, preserveTangentWeight=True, translate=True, rotate=True, start=None, end=None):
@@ -2348,8 +2357,99 @@ class Vector:
                        -self.x * other.z + self.z * other.x,
                        self.x * other.y - self.y * other.x)
 
+    def axis_angle(self, other):
+        if not self._isCompatible(other):
+            raise TypeError('Vectors arent compatible for axis/angle.')
+        a = self.normalized()
+        b = other.normalized()
+        angle = math.acos(a.dot(b))
+        axis = a.cross(b)
+        return axis,angle
 
 
+class Matrix:
+
+    def __init__(self, *args):
+        '''
+        Initialize the vector with either a maya matrix, or a 16 item array
+        '''
+        self._array = None
+
+        if not args:
+            self._array = [1,0,0,0,
+                          0,1,0,0,
+                          0,0,1,0,
+                          0,0,0,1]
+        elif len(args) == 1:
+            if isinstance(args[0], Matrix):
+                self._array = args[0]._array
+            elif isinstance(args[0], om.MMatrix):
+                self._array = [x for x in args[0]]
+            elif isinstance(args[0], (list,tuple)) and len(args[0]) == 16:
+                self._array = args[0]
+        elif len(args) == 16:
+            self._array = args
+        
+    def __repr__(self):
+        return 'Matrix({0:.2f},{1:.2f},{2:.2f} ... {4:.2f},{5:.2f},{6:.2f} ... {8:.2f},{9:.2f},{10:.2f} ... {12:.2f},{13:.2f},{14:.2f})'.format(*self)
+
+    #iterator methods
+    def __iter__(self):
+        return iter(self.array)
+
+    def __getitem__(self, key):
+        return self.array[key]
+
+    def __setitem__(self, key, value):
+        self.array[key] = value
+        self._MMatrix = None
+        self._MTransformMatrix = None
+
+    def __len__(self):
+        return 16
+    
+    def __mul__(self, other):
+
+        if not isinstance(other, Matrix):
+            raise TypeError('Other matrix must be a Matrix type.')
+        return Matrix(self.MMatrix * other.MMatrix)
+    
+    @property
+    def MMatrix(self):
+        return om.MMatrix(self._array)
+    
+    @property
+    def MTransformMatrix(self):
+        return om.MTransformMatrix(self.MMatrix)
+    
+    def inverse(self):
+        return Matrix(self.MMatrix.inverse())
+    
+    @property
+    def x(self):
+        return Vector(self._array[0],self._array[1],self._array[2])
+        
+    @property
+    def y(self):
+        return Vector(self._array[4],self._array[5],self._array[6])
+        
+    @property
+    def z(self):
+        return Vector(self._array[8],self._array[9],self._array[10])
+    
+    def translate(self):
+        return self.MTransformMatrix.translation(om.MSpace.kWorld)
+
+    def rotate(self, rotateOrder):
+        r = self.MTransformMatrix.trotation(om.MSpace.kWorld, asQuaternion=False)
+        return [math.degrees(x) for x in r]
+        
+    def scale(self):
+        return self.MTransformMatrix.tscale(om.MSpace.kWorld)
+
+    def mult_point(self, point):
+        pass
+    
 #      ______________________
 # - -/__ Revision History __/- - - - - - - - - - - - - - - - - - - - - - - -
 #

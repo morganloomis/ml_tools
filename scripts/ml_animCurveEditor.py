@@ -82,6 +82,7 @@ import maya.cmds as mc
 from maya import OpenMaya
 
 import itertools
+from functools import partial
 
 try:
     import ml_utilities as utl
@@ -285,9 +286,23 @@ change tabs to choose options related to that function.''') as win:
                            )
         mc.setParent('..')
 
+        #                   ______
+        #__________________/ Swap \_________________
+        tab6 = mc.columnLayout(adj=True)
+
+        mc.separator(height=8, style='none')
+        mc.text('Swap rotation curves when orientation changes.')
+        mc.separator(height=16, style='in')
+
+        win.ButtonWithPopup(label='X <-> Y', command=partial(swap, True,  True,  False), annotation='Swap X and Y curves')
+        win.ButtonWithPopup(label='X <-> Z', command=partial(swap, True,  False, True),  annotation='Swap X and Z curves')
+        win.ButtonWithPopup(label='Y <-> Z', command=partial(swap, False, True,  True),  annotation='Swap Y and Z curves')
+        mc.setParent('..')
+
+
         #                         __________
         #________________________/ Clean Up \_________
-        tab6 = mc.columnLayout(adj=True)
+        tab7 = mc.columnLayout(adj=True)
 
         mc.separator(height=8, style='none')
         mc.text('Various tools for deleting keys.')
@@ -313,7 +328,8 @@ change tabs to choose options related to that function.''') as win:
                                                 (tab3, 'Scale Time'),
                                                 (tab4, 'Scale Value'),
                                                 (tab5, 'Clamp'),
-                                                (tab6, 'Clean Up')
+                                                (tab6, 'Swap'),
+                                                (tab7, 'Clean Up')
                                                 ))
 
 
@@ -534,6 +550,26 @@ def deleteSubFrameKeys(selectionOption=1):
         cutTimes = [x for x in times if x % 1 != 0 and -9999 < x < 9999]
         if cutTimes:
             mc.cutKey(curve, time=utl.castToTime(cutTimes))
+
+
+def swap(x=False, y=False, z=False):
+
+    if int(x) + int(y) + int(z) != 2:
+        raise RuntimeError('Two True args required.')
+
+    sel = mc.ls(sl=True)
+
+    attrA = 'rx' if x else 'ry'
+    attrB = 'rz' if z else 'ry'
+
+
+    for each in sel:
+        a = mc.listConnections('{}.{}'.format(each, attrA), type='animCurve')
+        b = mc.listConnections('{}.{}'.format(each, attrB), type='animCurve')
+        if not a and b:
+            continue
+        mc.connectAttr('{}.output'.format(a[0]), '{}.{}'.format(each, attrB), force=True)
+        mc.connectAttr('{}.output'.format(b[0]), '{}.{}'.format(each, attrA), force=True)
 
 
 if __name__ == '__main__': ui()

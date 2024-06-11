@@ -121,6 +121,15 @@ try:
 except ImportError:
     pass
 
+poseCapture = None
+try:
+    from leap import poseCapture
+except ImportError:
+    pass
+
+from importlib import reload
+reload(ml_match)
+
 
 PUP_ID_PREFIX = 'pupID_'
 CONTROL_ATTR = PUP_ID_PREFIX+'control'
@@ -131,7 +140,7 @@ JOINT_WORLD_MATRIX_ATTR = 'skinCluster_worldMatrix'
 def main():
     #not sure why yet but running it twice seems to make it work
     initPuppetContextMenu()
-    initPuppetContextMenu()
+    filter_graphEditor()
 
 
 # ====================================================================================
@@ -357,6 +366,9 @@ def getDagMenuScript():
     filename = result.split('found in: ')[-1]
     return filename
 
+def defer_initPuppetContextMenu():
+    #cmd = 'import ml_puppet;ml_puppet.initPuppetContextMenu()'
+    mc.evalDeferred('initPuppetContextMenu()')
 
 def initPuppetContextMenu():
 
@@ -497,69 +509,16 @@ def puppetContextMenu(parent, node):
         mc.menuItem(divider=True)
 
 
-    ##selection
-    #if appendage or puppet:
-
-        #mc.menuItem(label='Selection', subMenu=True)
-
-        ##select parent appendage
-
-        ##select all worldspace controls
-        #mc.menuItem(label='Select World Space Controls', command=partial(selectWorldSpaceControls, nodes))
-        #mc.menuItem(label='Select Ik Controls', command=partial(selectIkControls, nodes))
-        #mc.menuItem(label='Select Fk Controls', command=partial(selectFkControls, nodes))
-        ##invert control selection
-        #mc.menuItem(label='Invert Selection', command=partial(invertSelection, nodes))
-        #mc.setParent('..', menu=True)
-
-        #mc.menuItem(divider=True, dividerLabel='Visibility')
-
-        #mc.menuItem(label='Control Visibility', subMenu=True)
-
-        #mc.menuItem(label='Show All', command=partial(showAllControls, puppet))
-
-        ##mc.menuItem(divider=True)
-        ##for visAttr,shortName in zip(('geoVisibility','controlVisibility','secondaryControlVisibility'),('Geo','Controls','Secondary')):
-
-            ##if mc.attributeQuery(visAttr, exists=True, node=appendage):
-                ##if mc.getAttr(appendage+'.'+visAttr):
-                    ##mc.menuItem(label='Hide '+shortName, command=partial(mc.setAttr, appendage+'.'+visAttr, 0))
-                ##else:
-                    ##mc.menuItem(label='Show '+shortName, command=partial(mc.setAttr, appendage+'.'+visAttr, 1))
-
-        #mc.setParent('..', menu=True)
-
-        #if puppet:
-            #if mc.attributeQuery('visibilitySets', exists=True, node=puppet):
-                #sets = mc.listConnections('{}.visibilitySets'.format(puppet), type='objectSet', source=False, destination=True)
-                #if sets:
-                    #mc.menuItem(label='Hide Sets', subMenu=True)
-                    #for s in sets:
-                        #mc.menuItem(label=s, command='import maya.cmds;maya.cmds.hide("{}")'.format(s))
-                    #mc.setParent('..', menu=True)
-
-                    #mc.menuItem(label='Show Sets', subMenu=True)
-                    #mc.menuItem(label='Show All', command='import maya.cmds;maya.cmds.showHidden({})'.format(','.join(['"{}"'.format(x) for x in sets])))
-                    #mc.menuItem(divider=True)
-                    #for s in sets:
-                        #mc.menuItem(label=s, command='import maya.cmds;maya.cmds.showHidden("{}")'.format(s))
-                    #mc.setParent('..', menu=True)
-
-        #mc.menuItem(divider=True)
-
-    #mc.menuItem(label='Mirroring', subMenu=True)
-    #mc.menuItem(label='Mirror Pose', command=partial(mirrorPose, nodes))
-    #mc.menuItem(label='Flip Pose', command=partial(flipPose, nodes))
-    #mc.menuItem(divider=True)
-    #mc.menuItem(label='Mirror Animation', command=partial(mirrorAnimation, nodes))
-    #mc.menuItem(label='Flip Animation', command=partial(flipAnimation, nodes))
-    #mc.setParent('..', menu=True)
-    
     #rotate order
     if ml_convertRotationOrder and mc.getAttr(node+'.rotateOrder', channelBox=True):
         roo = mc.getAttr(node+'.rotateOrder')
         #rotOrders = ('xyz')
         mc.menuItem(label='Convert Rotate Order...', command=partial(convertRotateOrderUI, nodes))    
+        mc.menuItem(divider=True)
+
+    if poseCapture and appendage and 'hand' in appendage:
+        mc.menuItem(label='Ultraleap Pose Capture')    
+        mc.menuItem(label='Ultraleap Animation Capture')    
         mc.menuItem(divider=True)
     
     #== from here out, populate by code nodes ===============================
@@ -585,6 +544,8 @@ def puppetContextMenu(parent, node):
         return
     
     driverAttrs = []
+    #need to combine systems that have the same driver names and ranges into one menu item
+    menu = {}
     for system in systems:
         driverNode, driverAttr = system.driver.split('.',1)
 
@@ -592,7 +553,6 @@ def puppetContextMenu(parent, node):
             print('Max value required for menu')
             continue
         
-        currentValue = mc.getAttr(driverNode+'.'+driverAttr)
         min = mc.attributeQuery(driverAttr, node=driverNode, min=True)[0]
         max = mc.attributeQuery(driverAttr, node=driverNode, max=True)[0]
         valueList = mc.attributeQuery(driverAttr, node=driverNode, listEnum=True)
@@ -606,12 +566,41 @@ def puppetContextMenu(parent, node):
         if len(valueList) == 2 and driverAttr in ['fk_ik', 'fkIk']:
             valueList = ['FK', 'IK']
 
-        mc.menuItem(label=driverAttr, subMenu=True)
+        menuData = tuple([driverAttr]+valueList)
+        if not menuData in menu:
+            menu[menuData] = []
+        menu[menuData].append(system)
+    
+    labels = [x[0] for x in menu.keys()]
+    labelsUnique = len(labels) == len(set(labels))
+    for menuData in menu.keys():
+        #figure the label based on the number of unique things selected
+        #two identical labels can have different value lists, so they need to prefixed.
+        #prefix labels unless there's only 1 entry, or if all the labels are already unique
+        label = menuData[0]
+        systems = menu[menuData]
 
+        if len(labels) > 1 and not labelsUnique:
+            systemDrivers = [x.driver.split('.')[0] for x in systems]
+            prefix = ', '.join(systemDrivers)
+            if len(prefix) > 24:
+                prefix = prefix[:20] + '. . .'
+            label = prefix+label
+        
+        mc.menuItem(label=label, subMenu=True)
+        system = systems[0]
+
+        currentValue = None
+        value = None
+        values = [mc.getAttr(system.system+'.driver') for system in systems]
+        allEqual = values.count(values[0]) == len(values)
+
+        currentValue = mc.getAttr(system.system+'.driver')
+        
         # -------------------------------------------
         mc.menuItem(label='Switch Current', subMenu=True)
-        for i, each in enumerate(valueList):
-            if i+min == currentValue:
+        for i, each in enumerate(menuData[1:]):
+            if allEqual and i == currentValue: #need to take into account min
                 continue
             mc.menuItem(label=each, command=partial(do_match_current, system, i))
         mc.setParent('..', menu=True)
@@ -624,35 +613,35 @@ def puppetContextMenu(parent, node):
     
         mc.setParent('..', menu=True)
     
-
-# def attributeMenuItem(node, attr):
-
-#     plug = node+'.'+attr
-#     niceName = mc.attributeName(plug, nice=True)
-
-#     #get attribute type
-#     attrType = mc.getAttr(plug, type=True)
-
-#     if attrType == 'enum':
-#         listEnum = mc.attributeQuery(attr, node=node, listEnum=True)[0]
-#         if not ':' in listEnum:
-#             return
-#         listEnum = listEnum.split(':')
-#         mc.menuItem(label=niceName, subMenu=True)
-#         for value, label in enumerate(listEnum):
-#             mc.menuItem(label=label, command=partial(mc.setAttr, plug, value))
-#         mc.setParent('..', menu=True)
-#     elif attrType == 'bool':
-#         value = mc.getAttr(plug)
-#         label = 'Toggle '+ niceName
-#         mc.menuItem(label=label, command=partial(mc.setAttr, plug, not value))
-
-
 def do_match_current(system, toValue, *args):
     system.match_current(toValue)
 
 def do_match_range(system, toValue, *args):
     system.match_range(toValue)
+
+def match_fk_range(*args):
+    match_selected(0, range=True)
+
+def match_ik_range(*args):
+    match_selected(1, range=True)
+
+def match_fk_current(*args):
+    match_selected(0, range=False)
+
+def match_ik_current(*args):
+    match_selected(1, range=False)
+
+def match_selected(toValue, range=False):
+    sel = mc.ls(sl=True)
+    if not sel:
+        return
+    systems = ml_match.get_systems(sel)
+    for system in systems:
+        if range:
+            system.match_range(toValue)
+        else:
+            system.match_current(toValue)
+
 
 def convertRotateOrderUI(nodes, *args):
     '''
@@ -665,14 +654,32 @@ def convertRotateOrderUI(nodes, *args):
         ml_convertRotationOrder.loadTips()
 
 
-#=================
+def fk_ik_ui():
+    '''
+    User interface for arc tracer
+    '''
 
+    with utl.MlUi('matching', 'Matching', width=400, height=180, info='''Select systems to match.
+Any control affected by the fk/ik system will do.''') as win:
+    
+        win.buttonWithPopup(label='Match Current FK', command=match_fk_current, annotation='Match to FK over range.',
+                            shelfLabel='fk', shelfIcon='ikEffector')
+        win.buttonWithPopup(label='Match Current IK', command=match_ik_current, annotation='Match to FK over range.',
+                            shelfLabel='ik', shelfIcon='ikEffector')
+        win.buttonWithPopup(label='Match Range FK', command=match_fk_range, annotation='Match to FK over range.',
+                            shelfLabel='fk', shelfIcon='ikEffector')
+        win.buttonWithPopup(label='Match Range IK', command=match_ik_range, annotation='Match to FK over range.',
+                            shelfLabel='ik', shelfIcon='ikEffector')
+
+
+#=================
 
 def space_switch(nodes=None, toSpace=None, switchRange=False, bakeOnOnes=False):
 
+    sel = mc.ls(sl=True)
+
     if switchRange:
         start, end = utl.frameRange()
-
     
     controls = []
     attributes = []
@@ -710,6 +717,7 @@ def getMirrorName(node, a='Lf_', b='Rt_'):
         return node.replace(a,b)
     elif b in node:
         return node.replace(b,a)
+    return None
         
 
 def getMirrorMap(nodes=None):
@@ -752,9 +760,9 @@ def getMirrorPairs(nodes):
             #mirrorPairs[each] = mirrorMap[each]
     for each in nodes:
         mirror = getMirrorName(each)
-        if mc.objExists(mirror):
+        if mirror and mc.objExists(mirror):
             mirrorPairs[each] = mirror
-            
+    
     return mirrorPairs
 
 
@@ -769,11 +777,16 @@ def getMirrorAxis(node):
 
 
 def selectReplaceMirror(nodes, *args):
-    mc.select(list(getMirrorPairs(nodes).values()))
+    pairs = getMirrorPairs(nodes)
+    if not pairs:
+        return
+    mc.select(list(pairs.values()))
 
 
 def selectAddMirror(nodes, *args):
     pairs = getMirrorPairs(nodes)
+    if not pairs:
+        return
     mc.select(list(pairs.keys())+list(pairs.values()))
 
 
@@ -963,14 +976,34 @@ def hasFlippedParent(node, testRange=3):
     return False
 
 
-def puppet_export(namespace, fbxFile):
+def export_animation(namespace=None, fbxFile=None):
     '''
     Export the puppet with the given namespace, to the given filepath.
     Namespace is required.
     '''
     
-    if not os.path.isdir(os.path.dirname(fbxFile)):
-        raise RuntimeError('Directory does not exist: {}'.format(fbxFile))
+    if not namespace:
+        sel = mc.ls(sl=True)
+        if not len(sel) == 1:
+            raise RuntimeError('select 1 puppet')
+        
+        ns = utl.getNamespace(sel[0])
+        namespace = ns.strip(':')
+        if not namespace:
+            raise RuntimeError('puppet must have a namespace')
+
+    if fbxFile:
+        if not os.path.isdir(os.path.dirname(fbxFile)):
+            raise RuntimeError('Directory does not exist: {}'.format(fbxFile))
+    else:
+        filename = mc.fileDialog2(caption='Export Animation', 
+                                fileFilter='Animation Files (*.fbx)', 
+                                fileMode=0,
+                                dialogStyle=1)
+        fbxFile = filename[0]
+        if not fbxFile.endswith('.fbx'):
+            fbxFile+='.fbx'
+    
     
     fbxFile = os.path.normpath(fbxFile).replace('\\', '/')
     
@@ -980,12 +1013,15 @@ def puppet_export(namespace, fbxFile):
     skel.connect_skeleton()
     
     mc.select(skel.roots)
-    
-    FBX_export(fbxFile, 
-               #animationOnly=True,
-               inputConnections=False,
-               bakeComplexAnimation=True)
-    mc.delete(skel.roots)
+    try:
+        FBX_export(fbxFile, 
+                #animationOnly=True,
+                inputConnections=False,
+                bakeComplexAnimation=True)
+    except Exception as err:
+        raise err
+    finally:
+        mc.delete(skel.roots)
     
     
 def FBX_export(filename, selection=True, **kwargs):
@@ -1169,7 +1205,6 @@ class SkeletonEntry(object):
                 b = mc.listConnections('{}.inputMatrix'.format(a[0]), type='multMatrix', d=False)
                 if b:
                     j = mc.listConnections('{}.matrixIn[0]'.format(b[0]), type='joint', d=False)
-                    print('{} {}'.format(j, self.joint))
                     if j and j == self.joint:
                         self._localMatrix = b
 
@@ -1182,7 +1217,6 @@ class SkeletonEntry(object):
             mc.connectAttr('{}.jointChain[{}]'.format(self.skeletonNode, self.index), '{}.matrixIn[0]'.format(self._localMatrix))
             mc.connectAttr('{}.parentInverseMatrix[0]'.format(self.joint), '{}.matrixIn[1]'.format(self._localMatrix))
             
-
         return self._localMatrix
     
     def connect_joint(self):
@@ -1237,6 +1271,13 @@ def remove_skeleton():
     mc.dgdirty(a=True)
         
     return count
+
+def filter_graphEditor():
+    if not mc.outlinerEditor('graphEditor1OutlineEd', q=True, exists=True):
+        mm.eval('GraphEditor;')
+    filter = mc.itemFilter(byName='*.offsetParentMatrix', negate=True)
+    mc.outlinerEditor('graphEditor1OutlineEd', e=True, attrFilter=filter, ignoreHiddenAttribute=True)
+    mm.eval('AEdagNodeCommonRefreshOutliners();')
 
 #      ______________________
 # - -/__ Revision History __/- - - - - - - - - - - - - - - - - - - - - - - -
