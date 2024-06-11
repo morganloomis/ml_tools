@@ -298,8 +298,8 @@ The fields on the right can be used for notes.''', menu=False) as win:
                 fieldMinValue=-1000, fieldMaxValue=1000,
                 changeCommand=self.uiUpdateStartFrame)
 
-            self.frameRateField = mc.intFieldGrp(label='Frame Rate', value1=self.frameRate, enable1=False, extraLabel='fps', annotation='')
-
+            self.frameRateField = mc.floatFieldGrp(label='Frame Rate', value1=self.frameRate, enable1=False, extraLabel='fps', annotation='', precision=3)
+            
             mc.scrollLayout()
             mc.rowColumnLayout(numberOfColumns=3, columnWidth=[(1, 50), (2, 80), (3, 340)])
             mc.text('Frame')

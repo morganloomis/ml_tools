@@ -433,7 +433,7 @@ def getCurrentCamera():
 
 def getFrameRate():
     '''
-    Return an int of the current frame rate
+    Return a float of the current frame rate.
     '''
     currentUnit = mc.currentUnit(query=True, time=True)
     if currentUnit == 'film':
@@ -449,7 +449,7 @@ def getFrameRate():
     if currentUnit == 'ntscf':
         return 60
     if 'fps' in currentUnit:
-        return int(currentUnit.replace('fps',''))
+        return float(currentUnit.replace('fps',''))
 
     return 1
 
