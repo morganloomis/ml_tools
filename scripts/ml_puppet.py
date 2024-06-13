@@ -1088,7 +1088,7 @@ class Skeleton(object):
                 self.roots.append(entry.name)
                 continue
             entry.joint = mc.parent(entry.joint, entry.parent.name)[0]
-            
+
         #create a joint proxy of the blendshape node
         if self.namespace:
             blendshapes = mc.ls(self.namespace+':*', type='blendShape') or []
@@ -1112,8 +1112,9 @@ class Skeleton(object):
         '''
         for entry in self._entries.values():
             entry.connect_joint()
-
-
+            if mc.attributeQuery('split_scale', node=entry.skeletonNode, exists=True) and mc.getAttr(f'{entry.skeletonNode}.split_scale'):
+                entry.split_scale()
+            
     def connect_skin(self):
         for entry in list(self._entries.values()):
             entry.connect_skin()
@@ -1133,6 +1134,8 @@ class SkeletonEntry(object):
         self.skeletonNode = skeletonNode
         self.index = index
         self.joint = None
+        self.scale = None
+        self.decompose = None
     
     @property
     def plug(self):
@@ -1172,6 +1175,28 @@ class SkeletonEntry(object):
                         break
                     trace = mc.listConnections(trace[0], source=True, destination=False, plugs=True)
         return self._parent
+    
+    @property
+    def is_leaf(self):
+        '''
+        This needs more testing, still isn't working for all situations.
+        '''
+        def _trace_child_connections(plug):
+            plugs = mc.listConnections(plug, source=False, destination=True, plugs=True) or []
+            for p in plugs:
+                node, attr = p.split('.',1)
+                if attr == 'parent' and mc.attributeQuery('puppeteerDataSkeleton', node=node, exists=True):
+                    return True
+                if _trace_child_connections(p):
+                    return True
+
+        #check whether it's hierarchical and not the last index
+        if mc.getAttr('{}.hierarchical'.format(self.skeletonNode)) and self.index < mc.getAttr('{}.jointChain'.format(self.skeletonNode), size=True):
+            return False
+
+        #check whether it's not plugged into the parent attribute of any other skelnodes, recursively
+        return not _trace_child_connections(self.plug)
+                
     
     def set_parent(self, parent):
         ''''''
@@ -1227,11 +1252,41 @@ class SkeletonEntry(object):
         mc.connectAttr('{}.outputRotate'.format(self.decompose), '{}.rotate'.format(self.joint))
         mc.connectAttr('{}.outputScale'.format(self.decompose), '{}.scale'.format(self.joint))
 
+    def split_scale(self):
+        '''
+        If the joint is not a root or leaf, remove scale, and transfer scale to a new leaf joint underneath.
+        '''
+        if not self.joint:
+            raise RuntimeError('joint not created yet.')
+        if self.is_leaf:
+            return
+        
+        if not self.decompose:
+            self.connect_joint()
+
+        mc.select(clear=True)
+        self.scale = mc.createNode('joint', name=self.name+'_scale')
+        mc.setAttr('{}.segmentScaleCompensate'.format(self.scale), 0)
+        mc.addAttr(self.scale, ln=JOINT_WORLD_MATRIX_ATTR, dt='matrix', keyable=True)
+        mc.connectAttr(self.plug, '{}.{}'.format(self.scale, JOINT_WORLD_MATRIX_ATTR))
+
+        #parent
+        self.scale = mc.parent(self.scale, self.joint)[0]
+        for a in ['t','r','jo']:
+            for b in 'xyz':
+                mc.setAttr(f'{self.scale}.{a}{b}',0)
+
+        #transfer scale from parent to this.
+        mc.disconnectAttr('{}.outputScale'.format(self.decompose), '{}.scale'.format(self.joint))
+        mc.setAttr('{}.scale'.format(self.joint), 1,1,1)
+        mc.connectAttr('{}.outputScale'.format(self.decompose), '{}.scale'.format(self.scale))
+        
 
     def connect_skin(self):
         #connect to skincluster
         for skinCon in mc.listConnections(self.plug, source=False, destination=True, type='skinCluster', plugs=True) or []:
-            mc.connectAttr(self.joint+'.worldMatrix[0]', skinCon, force=True)
+            jnt = self.scale or self.joint
+            mc.connectAttr(jnt+'.worldMatrix[0]', skinCon, force=True)
             
 
 def add_skeleton(includeBlendshapes=False):
