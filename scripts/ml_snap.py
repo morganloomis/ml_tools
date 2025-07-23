@@ -1,6 +1,7 @@
 import maya.cmds as mc
 import maya.api.OpenMaya as om
 import math
+import ml_utilities as utl
 
 def snap(node=None, target=None, offset=None, position=True, orientation=True, iterationMax=4):
     '''
@@ -11,13 +12,21 @@ def snap(node=None, target=None, offset=None, position=True, orientation=True, i
     if not node and not target:
         sel = mc.ls(sl=True)
         if not len(sel) == 2:
-            raise RuntimeError('Select 2 nodes to snap.')
+            utl.error('Select a source and target node to snap.')
         node, target = sel
-
-    #or a matrix
-    if not(isinstance(target, (list, tuple)) and len(target) == 16):
-        target = get_worldMatrix(target) 
-
+    
+    if isinstance(target, (list, tuple, utl.Vector)):
+        if len(target) == 3:
+            #point
+            target = position_to_matrix(target)
+        elif len(target) != 16:
+            raise RuntimeError(f'Target {target} is not valid')
+    elif mc.objExists(target):
+        #object
+        target = get_worldMatrix(target)
+    else:
+        raise RuntimeError(f'Target {target} is not valid')
+    
     set_worldMatrix(node, target, offsetMatrix=offset, position=position, orientation=orientation, iterationMax=iterationMax)
 
 

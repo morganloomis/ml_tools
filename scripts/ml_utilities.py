@@ -880,6 +880,13 @@ def message(msg, position='midCenterTop'):
     fadeTime = min(len(msg)*100, 2000)
     mc.inViewMessage( amg=msg, pos=position, fade=True, fadeStayTime=fadeTime, dragKill=True)
 
+def warning(msg):
+    message(msg)
+    OpenMaya.MGlobal.displayWarning(msg)
+
+def error(msg):
+    message(msg)
+    OpenMaya.MGlobal.displayError(msg)
 
 def minimizeRotationCurves(obj):
     '''
@@ -2327,6 +2334,16 @@ class Vector:
     def magnitude(self):
         return math.sqrt(sum([x**2 for x in self]))
 
+    def delta(self, other):
+        return self - other
+
+    def distance(self, other):
+        return self.delta(other).magnitude()
+
+    def equivalent(self, other, tolerence=0.001):
+        if self.distance(other) < tolerence:
+            return True
+        return False
 
     def normalize(self):
         d = self.magnitude()

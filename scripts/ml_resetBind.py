@@ -73,7 +73,7 @@ def main():
     for each in sel:
         shapes = mc.listRelatives(each, shapes=True, pa=True)
 
-        for shape in shapes:
+        for shape in shapes or []:
             #get skin cluster
             history = mc.listHistory(shape, groupLevels=True, pruneDagObjects=True)
             skins = mc.ls(history, type='skinCluster')
@@ -82,6 +82,17 @@ def main():
                 joints = mc.skinCluster(skin, query=True, influence=True)
 
                 mc.setAttr(skin+'.envelope', 0)
+
+                #need to temporarily disconnect anything that might be connected to prebind matrix
+                bindPreConnections = mc.listConnections(f'{skin}.bindPreMatrix', source=True, destination=False, connections=True, plugs=True)
+                bindPreValues = {}
+                if bindPreConnections:
+                    for s,d in zip(bindPreConnections[1::2], bindPreConnections[::2]):
+                        value = mc.getAttr(d)
+                        mc.disconnectAttr(s,d)
+                        #mc.setAttr(d, value, type='matrix')
+                    mc.refresh()
+                    
                 mc.skinCluster(skin, edit=True, unbindKeepHistory=True)
 
                 #delete bindPose
@@ -93,6 +104,12 @@ def main():
                     mc.delete(dagPose)
 
                 mc.skinCluster(joints, shape, toSelectedBones=True)
+                
+                # if bindPreConnections:
+                #     mc.refresh()
+                #     for s,d in zip(bindPreConnections[1::2], bindPreConnections[::2]):
+                #         mc.connectAttr(s,d, f=True)
+
                 mc.setAttr(skin+'.envelope', 1)
     if sel:
         mc.select(sel)

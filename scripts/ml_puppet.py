@@ -121,18 +121,16 @@ try:
 except ImportError:
     pass
 
-poseCapture = None
-try:
-    from leap import poseCapture
-except ImportError:
-    pass
-
+from importlib import reload
+reload(ml_match)
 
 PUP_ID_PREFIX = 'pupID_'
 CONTROL_ATTR = PUP_ID_PREFIX+'control'
 PUPPET_ATTR = PUP_ID_PREFIX+'puppet'
 APPENDAGE_ATTR = 'puppeteer_appendage'
 JOINT_WORLD_MATRIX_ATTR = 'skinCluster_worldMatrix'
+JOINT_PREBIND_MATRIX_ATTR = 'skinCluster_preBindMatrix'
+SKELETON_NODE_ATTR = 'puppeteerDataSkeleton'
 
 def main():
     initPuppetContextMenu()
@@ -512,10 +510,6 @@ def puppetContextMenu(parent, node):
         mc.menuItem(label='Convert Rotate Order...', command=partial(convertRotateOrderUI, nodes))    
         mc.menuItem(divider=True)
 
-    if poseCapture and appendage and 'hand' in appendage:
-        mc.menuItem(label='Ultraleap Pose Capture')    
-        mc.menuItem(label='Ultraleap Animation Capture')    
-        mc.menuItem(divider=True)
     
     #== from here out, populate by code nodes ===============================
     # codeNodes = []
@@ -542,6 +536,7 @@ def puppetContextMenu(parent, node):
     driverAttrs = []
     #need to combine systems that have the same driver names and ranges into one menu item
     menu = {}
+    valueLists = []
     for system in systems:
         driverNode, driverAttr = system.driver.split('.',1)
 
@@ -603,7 +598,7 @@ def puppetContextMenu(parent, node):
 
         # -------------------------------------------
         mc.menuItem(label='Switch Range', subMenu=True)
-        for i, each in enumerate(valueList):
+        for i, each in enumerate(menuData[1:]):
             mc.menuItem(label=each, command=partial(do_match_range, system, i))
         mc.setParent('..', menu=True)
     
@@ -996,6 +991,8 @@ def export_animation(namespace=None, fbxFile=None):
                                 fileFilter='Animation Files (*.fbx)', 
                                 fileMode=0,
                                 dialogStyle=1)
+        if not filename:
+            return
         fbxFile = filename[0]
         if not fbxFile.endswith('.fbx'):
             fbxFile+='.fbx'
@@ -1005,10 +1002,17 @@ def export_animation(namespace=None, fbxFile=None):
     
     skel = Skeleton(namespace=namespace)
     skel.init_skeletonNodes()
-    skel.create_skeleton()
+
+    quarantine = []
+    for root in skel.root_names():
+        if mc.objExists('|'+root):
+            quarantine.append(QuarantineNode(root))
+
+    skel.create_skeleton(blendShapeProxy=True)
     skel.connect_skeleton()
     
-    mc.select(skel.roots)
+    roots = [x.joint for x in skel.roots]
+    mc.select(roots)
     try:
         FBX_export(fbxFile, 
                 #animationOnly=True,
@@ -1017,14 +1021,17 @@ def export_animation(namespace=None, fbxFile=None):
     except Exception as err:
         raise err
     finally:
-        mc.delete(skel.roots)
+        mc.delete(roots)
+
+    for q in quarantine:
+        q.release()
     
     
 def FBX_export(filename, selection=True, **kwargs):
     '''
     FBX command wrapper.
     '''
-    
+    filename = filename.replace('\\','/')
     #if not 'fileVersion' in kwargs:
         #kwargs['fileVersion'] = 'FBX202000'
     if not 'generateLog' in kwargs:
@@ -1043,14 +1050,31 @@ def FBX_export(filename, selection=True, **kwargs):
         cmd+=' -s'
     print(cmd)
     mm.eval(cmd)   
-    
+
+
+class QuarantineNode(object):
+    '''
+    Class for temporarily grouping assembly nodes that may cause name clashes.
+    '''
+
+    def __init__(self, node):
+        self.node = node
+        self.group = mc.group(node, name='QUARANTINE_#')
+
+    def release(self):
+        try:
+            mc.ungroup(self.group)
+        except RuntimeError as err:
+            print(f'Failed to ungroup: {self.group}')
+            raise err
+        
     
 def get_skeleton_nodes(namespace=None):
     '''Return all skeleton nodes found within a given namespace.'''
     ns = ''
     if namespace:
         ns = '{}:'.format(namespace)
-    return mc.ls(ns+'*.puppeteerDataSkeleton', o=True)
+    return mc.ls(ns+'*.'+SKELETON_NODE_ATTR, o=True)
 
 
 class Skeleton(object):
@@ -1064,9 +1088,32 @@ class Skeleton(object):
         self._entries = {}
         self.roots = []
         self.namespace = namespace
+
+    def root_names(self):
+        return [x.name for x in self._entries.values() if not x.parent]
+    
         
     def init_skeletonNodes(self):
         for skelNode in get_skeleton_nodes(namespace=self.namespace):
+            self.init_skeletonNode(skelNode)
+
+
+    def init_skeletonNode(self, skelNode):
+        #NEW METHOD
+        entries = []
+        if mc.attributeQuery('enabled',node=skelNode, exists=True) and not mc.getAttr(f'{skelNode}.enabled'):
+            return entries
+        
+        if mc.attributeQuery('chain',node=skelNode, exists=True):
+            i=0
+            while True:
+                if not mc.listConnections('{}.chain[{}].active_matrix'.format(skelNode, i), source=True, destination=False):
+                    break
+                entry = SkeletonEntry(skelNode, i)
+                self._entries[entry.name] = entry
+                entries.append(entry)
+                i+=1
+        else:
             i=0
             while True:
                 if not mc.listConnections('{}.jointChain[{}]'.format(skelNode, i), source=True, destination=False):
@@ -1074,38 +1121,67 @@ class Skeleton(object):
                 entry = SkeletonEntry(skelNode, i)
                 self._entries[entry.name] = entry
                 i+=1
+        return entries
 
-    def create_skeleton(self):
+
+    def create_skeleton(self, blendShapeProxy=True, parent=None):
         '''
         create a joint hierarchy from initialized skeleton entries
         '''
         
         for entry in self._entries.values():
             entry.create_joint()
-        
+
         for entry in self._entries.values():
-            if not entry.parent:
-                self.roots.append(entry.name)
+            if not entry.parent or not entry.parent.name:
+                self.roots.append(entry)
                 continue
-            entry.joint = mc.parent(entry.joint, entry.parent.name)[0]
+            entry.joint = mc.parent(entry.joint, self._entries[entry.parent.name].joint)[0]
+            entry.joint = mc.rename(entry.joint, entry.name)
 
         #create a joint proxy of the blendshape node
-        if self.namespace:
-            blendshapes = mc.ls(self.namespace+':*', type='blendShape') or []
-        else:
-            blendshapes = mc.ls(type='blendShape') or []
-        for bs in blendshapes:
-            aliasList = mc.aliasAttr(bs, query=True)
-            mc.select(clear=True)
-            joint = mc.joint(name=bs.split(':')[-1])
-            joint = mc.parent(joint, self.roots[0])[0]
-            
-            for n in range(0,len(aliasList),2):
-                attr = aliasList[n]
-                mc.addAttr(joint, ln=attr, keyable=True)
-                mc.connectAttr(bs+'.'+attr, joint+'.'+attr)
+        if blendShapeProxy:
+            if self.namespace:
+                blendshapes = mc.ls(self.namespace+':*', type='blendShape') or []
+            else:
+                blendshapes = mc.ls(type='blendShape') or []
+            for bs in blendshapes:
+                aliasList = mc.aliasAttr(bs, query=True)
+                mc.select(clear=True)
+                joint = mc.joint(name=bs.split(':')[-1])
+                joint = mc.parent(joint, self.roots[0].joint)[0]
+                
+                for n in range(0,len(aliasList),2):
+                    attr = aliasList[n]
+                    mc.addAttr(joint, ln=attr, keyable=True)
+                    mc.connectAttr(bs+'.'+attr, joint+'.'+attr)
     
-    
+    def refresh(self):
+        #this is kind of brute force, should be optimized
+        pass
+        # del(self._entries)
+        # self._entries = {}
+        # self.init_skeletonNodes()
+
+        # for entry in self._entries.values():
+        #     if not entry.joint:
+        #         entry.create_joint()
+        
+        # for entry in self._entries.values():
+        #     if not entry.parent:
+        #         self.roots.append(entry.name)
+        #         continue
+        #     current = mc.listRelatives(entry.joint, parent=True)
+        #     if current and current[0] == entry.parent.name:
+        #         continue
+        #     entry.joint = mc.parent(entry.joint, entry.parent.name)[0]
+
+
+        #or, go through all skeleton nodes, find ones that don't have joints, and only create those joints?
+        #also check parents?
+        
+
+
     def connect_skeleton(self):
         '''
         Connect joints to skeleton nodes in the scene
@@ -1115,10 +1191,21 @@ class Skeleton(object):
             if mc.attributeQuery('split_scale', node=entry.skeletonNode, exists=True) and mc.getAttr(f'{entry.skeletonNode}.split_scale'):
                 entry.split_scale()
             
+            
     def connect_skin(self):
         for entry in list(self._entries.values()):
             entry.connect_skin()
         mc.dgdirty(a=True)
+
+
+    def update_skeleton(self):
+        #add missing joint
+        #update parenting
+        #remove lost joints (unparent if skinned)
+        pass
+
+
+
     
     
 class SkeletonEntry(object):
@@ -1131,7 +1218,8 @@ class SkeletonEntry(object):
         self._parent = False
         self._children = []
         self._localMatrix = None
-        self.skeletonNode = skeletonNode
+        self.skeletonNode = str(skeletonNode)
+
         self.index = index
         self.joint = None
         self.scale = None
@@ -1139,19 +1227,42 @@ class SkeletonEntry(object):
     
     @property
     def plug(self):
+        #NEW METHOD
+        if mc.objExists(self.active):
+            return self.active
+        #OLD METHOD
         return '{}.jointChain[{}]'.format(self.skeletonNode, self.index)
         
+    @property
+    def struct(self):
+        return f'{self.skeletonNode}.chain[{self.index}]'
+
+    @property
+    def rest(self):
+        return f'{self.struct}.rest_matrix'
+    
+    @property
+    def active(self):
+        return f'{self.struct}.active_matrix'
+
     @property
     def name(self):
         '''
         Joint name is derived from the node providing the world matrix for the joint, minus suffix.
         '''
         if not self._name:
-            source = mc.listConnections('{}.jointChain[{}]'.format(self.skeletonNode, self.index), source=True, destination=False)
-            if not source:
-                raise RuntimeError('{}.jointChain[{}] has no connection.'.format(self.skeletonNode, self.index))
-            name = source[0].rsplit('_',1)[0].rsplit(':',1)[-1]
-            self._name = name.replace('__','_')         
+            #NEW METHOD
+            if mc.attributeQuery('chain', node=self.skeletonNode, exists=True):
+                plug = f'{self.skeletonNode}.chain[{self.index}].active_matrix'
+                if mc.listConnections(plug, source=True, destination=False):
+                    self._name = get_skeleton_joint_name(plug)
+
+        if not self._name:
+            #OLD METHOD
+            if mc.attributeQuery('jointChain', node=self.skeletonNode, exists=True):
+                plug = f'{self.skeletonNode}.jointChain[{self.index}]'
+                if mc.listConnections(plug, source=True, destination=False):
+                    self._name = get_skeleton_joint_name(plug)
         return self._name
     
     @property
@@ -1161,19 +1272,44 @@ class SkeletonEntry(object):
         '''
         if self._parent is False:
             if mc.getAttr('{}.hierarchical'.format(self.skeletonNode)) and self.index != 0:
+                #first, if it's a hierarchical chain and it's not the first index,
+                #just parent to the previous index
                 self.set_parent(SkeletonEntry(self.skeletonNode, self.index-1))
-            #trace the parent
             else:
+                #otherwise, chase the parent attribute until we hit a skeleton node
                 self._parent = None
-                trace = mc.listConnections('{}.parent'.format(self.skeletonNode), source=True, destination=False, plugs=True)
+                trace = mc.listConnections(f'{self.skeletonNode}.parent', source=True, destination=False, plugs=True) or False
                 while trace:
-                    if mc.attributeQuery('puppeteerDataSkeleton', node=trace[0], exists=True):
-                        node = trace[0].split('.')[0]
-                        index = int(trace[0].split('[')[-1].strip(']'))
+                    node, attr = trace[0].split('.',1)
+                    if mc.attributeQuery(SKELETON_NODE_ATTR, node=node, exists=True) and ('jointChain' in attr or 'chain' in attr):
+                        index = int(trace[0].split('[')[-1].split(']')[0])
                         #found the parent skeleton data node, get the joint it's pointing to
                         self.set_parent(SkeletonEntry(node, index))
                         break
+
                     trace = mc.listConnections(trace[0], source=True, destination=False, plugs=True)
+                    if trace:
+                        continue
+                    
+                    splitAttr = attr.split('.')[-1]
+                    parentAttr = mc.attributeQuery(splitAttr, listParent=True, node=node)
+
+                    if not parentAttr:
+                        trace=None
+                        break
+                    parentAttr = parentAttr[0]
+                    if '[' in attr:
+                        i = attr.split('[')[-1].split(']')[0]
+                        parentAttr = f'{parentAttr}[{i}]'
+
+                    parentCon = mc.listConnections(f'{node}.{parentAttr}', source=True, destination=False, plugs=True)
+                    
+                    if not parentCon:
+                        trace=None
+                        break
+                    #assume it's the same leaf attr
+                    trace = [f'{parentCon[0]}.{attr.split(".")[-1]}']
+
         return self._parent
     
     @property
@@ -1185,15 +1321,15 @@ class SkeletonEntry(object):
             plugs = mc.listConnections(plug, source=False, destination=True, plugs=True) or []
             for p in plugs:
                 node, attr = p.split('.',1)
-                if attr == 'parent' and mc.attributeQuery('puppeteerDataSkeleton', node=node, exists=True):
+                if attr == 'parent' and mc.attributeQuery(SKELETON_NODE_ATTR, node=node, exists=True):
                     return True
                 if _trace_child_connections(p):
                     return True
 
         #check whether it's hierarchical and not the last index
-        if mc.getAttr('{}.hierarchical'.format(self.skeletonNode)) and self.index < mc.getAttr('{}.jointChain'.format(self.skeletonNode), size=True):
+        if mc.getAttr('{}.hierarchical'.format(self.skeletonNode)) and self.index + 1 < mc.getAttr('{}.chain'.format(self.skeletonNode), size=True):
             return False
-
+        
         #check whether it's not plugged into the parent attribute of any other skelnodes, recursively
         return not _trace_child_connections(self.plug)
                 
@@ -1204,6 +1340,7 @@ class SkeletonEntry(object):
             raise RuntimeError('Parent should be SkeletonEntry type.')
         parent.append_child(self)
         self._parent = parent
+
         
     def append_child(self, child):
         if not child in self._children:
@@ -1211,8 +1348,29 @@ class SkeletonEntry(object):
         
     def create_joint(self):
         mc.select(clear=True)
-        self.joint = mc.createNode('joint', name=self.name)
-        mc.setAttr('{}.segmentScaleCompensate'.format(self.joint), 0)
+        found = []
+        if mc.objExists(self.name):
+            for node in mc.ls(self.name):
+                if mc.nodeType(node) != 'joint':
+                    warnings.warn(f'Joint name is already in use by another node! {node}')
+                else:
+                    found.append(node)
+        if found:
+            self.joint = found[0]
+        else:
+            self.joint = mc.createNode('joint', name=self.name)
+        mc.setAttr(f'{self.joint}.segmentScaleCompensate', 0)
+        mc.setAttr(f'{self.joint}.displayLocalAxis', 1)
+
+    def parent_joint(self):
+        '''
+        This should only be used for speed if a single joint is being created
+        and you know it has a parent.
+        The skeleton instance can get corrupted because this isn't being tracked.
+        '''
+        if self.parent:
+            self.joint = mc.parent(self.joint, self.parent.name)[0]
+            
     
     @property
     def localMatrix(self):
@@ -1235,9 +1393,17 @@ class SkeletonEntry(object):
             mc.connectAttr(self.plug, '{}.{}'.format(self.joint, JOINT_WORLD_MATRIX_ATTR))
 
             self._localMatrix = mc.createNode('multMatrix', name='{}_localMatrix'.format(self.name))
-            mc.connectAttr('{}.jointChain[{}]'.format(self.skeletonNode, self.index), '{}.matrixIn[0]'.format(self._localMatrix))
+            mc.connectAttr(self.plug, '{}.matrixIn[0]'.format(self._localMatrix))
             mc.connectAttr('{}.parentInverseMatrix[0]'.format(self.joint), '{}.matrixIn[1]'.format(self._localMatrix))
             
+            #prebind matrix
+            if mc.objExists(self.rest) and mc.listConnections(self.rest, source=True, destination=False):
+                mc.addAttr(self.joint, ln=JOINT_PREBIND_MATRIX_ATTR, dt='matrix', keyable=True)
+                
+                self._preBindInverse = mc.createNode('inverseMatrix', name='{}_preBindInverse'.format(self.name))
+                mc.connectAttr(self.rest, f'{self._preBindInverse}.inputMatrix')
+                mc.connectAttr(f'{self._preBindInverse}.outputMatrix', f'{self.joint}.{JOINT_PREBIND_MATRIX_ATTR}')
+
         return self._localMatrix
     
     def connect_joint(self):
@@ -1270,30 +1436,43 @@ class SkeletonEntry(object):
         mc.addAttr(self.scale, ln=JOINT_WORLD_MATRIX_ATTR, dt='matrix', keyable=True)
         mc.connectAttr(self.plug, '{}.{}'.format(self.scale, JOINT_WORLD_MATRIX_ATTR))
 
-        #parent
+        #disconnect parent scale before parenting
+        mc.disconnectAttr('{}.outputScale'.format(self.decompose), '{}.scale'.format(self.joint))
+        mc.setAttr('{}.scale'.format(self.joint), 1,1,1)
+        
+        #parent before connection
         self.scale = mc.parent(self.scale, self.joint)[0]
         for a in ['t','r','jo']:
             for b in 'xyz':
                 mc.setAttr(f'{self.scale}.{a}{b}',0)
 
         #transfer scale from parent to this.
-        mc.disconnectAttr('{}.outputScale'.format(self.decompose), '{}.scale'.format(self.joint))
-        mc.setAttr('{}.scale'.format(self.joint), 1,1,1)
         mc.connectAttr('{}.outputScale'.format(self.decompose), '{}.scale'.format(self.scale))
         
-
     def connect_skin(self):
         #connect to skincluster
+        jnt = self.scale or self.joint
         for skinCon in mc.listConnections(self.plug, source=False, destination=True, type='skinCluster', plugs=True) or []:
-            jnt = self.scale or self.joint
             mc.connectAttr(jnt+'.worldMatrix[0]', skinCon, force=True)
+        return
+        #skipping this connection for now, as it is not fully supported by modules and compile and 2024
+        #maybe some day.
+        #do this as a separate loop in case skin is connected to joints already.
+        if mc.attributeQuery(JOINT_PREBIND_MATRIX_ATTR, node=self.joint, exists=True):
+            for skinCon in mc.listConnections(self.joint, source=False, destination=True, type='skinCluster', plugs=True) or []:
+                skin = skinCon.split('.')[0]
+                i = skinCon.split('[')[-1].strip(']')
+                try:
+                    mc.connectAttr(f'{self.joint}.{JOINT_PREBIND_MATRIX_ATTR}', f'{skin}.bindPreMatrix[{i}]')
+                except:
+                    pass
             
 
 def add_skeleton(includeBlendshapes=False):
     
     skel = Skeleton()
     skel.init_skeletonNodes()
-    joints = skel.create_skeleton()
+    skel.create_skeleton(blendShapeProxy=includeBlendshapes)
     skel.connect_skeleton()
     skel.connect_skin()
 
@@ -1306,13 +1485,23 @@ def remove_skeleton():
     for joint in specialJoints:
         matrix = mc.listConnections('{}.{}'.format(joint, JOINT_WORLD_MATRIX_ATTR), source=True, destination=False, plugs=True)
         outputs = mc.listConnections('{}.worldMatrix[0]'.format(joint), source=False, destination=True, plugs=True) or []
-        
+        if not matrix:
+            continue
         for each in outputs:
-            if mc.nodeType(each.split('.')[0]) != 'skinCluster':
+            skin = each.split('.')[0]
+            if mc.nodeType(skin) != 'skinCluster':
                 continue
             mc.connectAttr(matrix[0], each, force=True)
             count+=1
-    
+
+            if mc.attributeQuery(JOINT_PREBIND_MATRIX_ATTR, node=joint, exists=True):
+                i = each.split('[')[-1].strip(']')
+                preBind = f'{skin}.bindPreMatrix[{i}]'
+                if mc.isConnected(f'{joint}.{JOINT_PREBIND_MATRIX_ATTR}', preBind):
+                    value = mc.getAttr(preBind)
+                    mc.disconnectAttr(f'{joint}.{JOINT_PREBIND_MATRIX_ATTR}', preBind)
+                    mc.setAttr(preBind, value, type='matrix')
+
     #selectively delete special joints that only have special joint children
     for joint in specialJoints:
         try:
@@ -1322,6 +1511,42 @@ def remove_skeleton():
     mc.dgdirty(a=True)
         
     return count
+
+def is_skeleton(node):
+    return mc.attributeQuery(SKELETON_NODE_ATTR, exists=True, node=node)
+
+
+def get_skeleton_joint_name(jointOrPlug):
+    jointOrPlug = str(jointOrPlug)
+    matrix = None
+    if '.' not in jointOrPlug:
+        if mc.attributeQuery(JOINT_WORLD_MATRIX_ATTR, exists=True, node=jointOrPlug):
+            skel = mc.listConnections(f'{jointOrPlug}.{JOINT_WORLD_MATRIX_ATTR}', source=True, destination=False, plugs=True)
+            if not skel:
+                raise RuntimeError(f'Skeletonized joint not connected to a skeleton node: {jointOrPlug}')
+            jointOrPlug = skel[0]
+        else:
+            #eventually handle more types of inputs
+            raise RuntimeError(f'Joint input must be a skeletonized joint: {jointOrPlug}')
+    
+    #check this is a skeleton node attr
+    if not is_skeleton(jointOrPlug.split('.')[0]):
+        raise RuntimeError(f'Plug must be from a skeleton node: {jointOrPlug}')
+    
+    #check its a matrix attr?
+    if mc.getAttr(jointOrPlug, type=True) != 'matrix':
+        raise RuntimeError(f'Non-matrix attribute: {jointOrPlug}')
+
+    matrix = mc.listConnections(jointOrPlug, source=True, destination=False)
+    if not matrix:
+        raise RuntimeError(f'Skeleton connection is not driven: {jointOrPlug}')
+    return get_skeleton_name_from_matrix(matrix[0])
+
+
+def get_skeleton_name_from_matrix(matrixNode):
+    name = matrixNode.rsplit('|',1)[-1].rsplit('_',1)[0].rsplit(':',1)[-1]
+    return name.replace('__','_')
+
 
 def filter_graphEditor():
     if not mc.outlinerEditor('graphEditor1OutlineEd', q=True, exists=True):

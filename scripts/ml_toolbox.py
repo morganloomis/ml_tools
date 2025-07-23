@@ -91,6 +91,7 @@ import os, re, sys, imp, posixpath
 from maya import OpenMaya
 
 MENU_ITEM_PREFIX = '*' #change this if you want a different prefix for custom menu
+SUB_MENU_PREFIX = '> ' #change this if you want a different prefix for custom menu
 MAIN_MENU_NAME_PREFIX = 'ml_mainWindowMenu_'
 
 #These are the functions that this script will look for when building the menu, in this order.
@@ -107,17 +108,28 @@ def main():
     toolbox(ml_toolbox_menu)
     
 
-def toolbox(module, verbose=True):
+def toolbox(module, verbose=False):
+
+    if is_batch_mode():
+        print('Skipping menu creation in batch mode.')
+        return
     
     tb = Toolbox(module, verbose=verbose)
     tb.createMainMenus()
 
 
 def customMenu(module, name=None, verbose=True):
+
+    if is_batch_mode():
+        print('Skipping menu creation in batch mode.')
+        return
     
     tb = Toolbox(module, verbose=verbose)
     tb.createCustomMenu(module.__path__[0], label=name, mainMenu=True)
     
+def is_batch_mode():
+    return os.environ.get('MAYA_BATCH', '0') != '0'
+
 
 def labelFromPath(path):
     '''
@@ -151,7 +163,8 @@ class Toolbox(object):
         self.rootModule = module
         self.namespace = self.rootModule.__name__
         self.menusPath = self.rootModule.__path__[0].replace('\\','/')
-        self.gMainWindow = mm.eval('$temp=$gMainWindow')
+        
+        self.gMainWindow = 'MayaWindow'
 
         self.tools = []
         self.hasHotkeys = []
@@ -163,6 +176,8 @@ class Toolbox(object):
 
         #get all the menus that are children of the main menu
         mainWindowMenus = mc.window(self.gMainWindow, query=True, menuArray=True)
+        if not mainWindowMenus:
+            return
         #get the label for each of the menus
         #this will be matched against tool directories
         self.mainMenus = {}
@@ -270,6 +285,8 @@ class Toolbox(object):
             return
         if not parent:
             parent = self.gMainWindow
+        if not parent:
+            return
         
         # recursive subMenu
         subItems = os.listdir(path)
@@ -305,7 +322,7 @@ class Toolbox(object):
         if mainMenu:
             menuName = mc.menu(menuName, parent=parent, to=True, label=label, allowOptionBoxes=True)
         else:
-            menuName = mc.menuItem(menuName, label=label, subMenu=True, parent=parent, allowOptionBoxes=True)
+            menuName = mc.menuItem(menuName, label=SUB_MENU_PREFIX+label, subMenu=True, parent=parent, allowOptionBoxes=True, italicized=True)
 
         #and recurse!
         #do directories first
@@ -341,9 +358,6 @@ class Toolbox(object):
         '''
         if not self.hasHotkeys:
             return
-
-        commands = list()
-        keys = list()
 
         doPrint = True
         for each in self.hasHotkeys:
@@ -382,7 +396,6 @@ class Tool(object):
             self.initMel()
         else:
             self.errors = True
-
 
         if self.module and self.isPython:
             #initialize hotkeys and markingMenus, python only
@@ -462,7 +475,6 @@ class Tool(object):
         if mc.menuItem(menuName, exists=True):
             mc.deleteUI(menuName)
 
-        insertAfter = None
         if self.isPython and hasattr(self.module,'insertAfter'):
             menuItemArray = mc.menu(parent, query=True, itemArray=True)
             if menuItemArray:

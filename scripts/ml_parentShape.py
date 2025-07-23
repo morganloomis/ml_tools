@@ -107,7 +107,7 @@ When unparenting shapes, a transform is created which the shape is parented to.'
                             shelfLabel='upShp')
 
 
-def parentShape(child=None, parent=None, maintainOffset=True):
+def parentShape(child=None, parent=None, maintainOffset=True, includeInvisible=False):
     '''
     Parent a child shape node to a parent transform. The child node can be a shape,
     or a transform which has any number of shapes.
@@ -138,6 +138,8 @@ def parentShape(child=None, parent=None, maintainOffset=True):
         mc.makeIdentity(thisChild, apply=True)
 
         for s in mc.listRelatives(thisChild, shapes=True, noIntermediate=True, path=True):
+            if not includeInvisible and mc.getAttr(f'{s}.v') == 0:
+                continue
             shape = mc.parent(s, parent, shape=True, relative=True)[0]
             #move to bottom
             mc.reorder(shape, back=True)

@@ -80,26 +80,10 @@ def get_matrix_data(matrices, start=None, end=None):
 
     plugs = {}
     for matrix in matrices:
-        obj, attr = matrix.split('.')
-
-        index = None
-
-        if '[' in attr:
-            attr, x = attr.split('[')
-            index = int(x.split(']')[0])
-
         data[matrix] = {}
-
         mSel = om.MSelectionList()
-        mSel.add(obj)
-        node = om.MFnDependencyNode(mSel.getDependNode(0))
-        plug = node.findPlug(attr, False)
-
-        if index is not None:
-            plug.evaluateNumElements()
-            plug = plug.elementByPhysicalIndex(index)
-
-        plugs[matrix] = plug
+        mSel.add(matrix)
+        plugs[matrix] = mSel.getPlug(0)
 
     for f in range(int(start), int(end+1)):
         timeContext = om.MDGContext(om.MTime(f, uiUnit))
@@ -331,13 +315,20 @@ def tag_skeleton(root):
             kids = child_joints(joint)
         return None
 
-    def leaf_joint(root):
+    def leaf_joint(root, keyed=False):
         kids = [root]
+        prev = root
+        joint = root
+
         while True:
+            prev = joint
             joint = kids[0]
             kids = child_joints(joint)
             if not kids:
-                return joint
+                if keyed and not mc.keyframe(joint, time=(':',), query=True, keyframeCount=True):
+                    return prev
+                else:
+                    return joint
             
     def bone_length(end):
         parent = mc.listRelatives(end, parent=True, f=True)
@@ -355,6 +346,35 @@ def tag_skeleton(root):
             totalLength += bone_length(parent[0])
             parent = mc.listRelatives(parent[0], parent=True, f=True)
         return totalLength
+    
+    def outlier_child(root):
+        #get the mean of all child positions. The one that's farthest away from mean in thumb.
+        points = {}
+        kids = mc.listRelatives(root, type='joint', pa=True)
+        count = len(kids)
+        for kid in kids:
+            points[kid] = utl.Vector(*mc.getAttr(kid+'.translate')[0])
+        
+        mean = utl.Vector(0,0,0)
+        for point in points.values():
+            mean+=point
+        mean = mean/count
+
+        outlier = kids[0]
+        maxDist = 0
+        for kid, point in points.items():
+            dist = (mean-point).magnitude()
+            if dist > maxDist:
+                outlier = kid
+                maxDist = dist
+
+        return outlier
+    
+    def order_by_distance(list, target):
+        result = []
+        pass
+            
+
 
     hip = first_branching_joint(root)
 
@@ -388,7 +408,7 @@ def tag_skeleton(root):
 
     head = None
     if neck:
-        head = leaf_joint(neck)
+        head = leaf_joint(neck, keyed=True)
     else:
         head = shortest_child_chain(chest)
     tag_joint(head, 'Center', 'Head', offset=offset)
@@ -426,6 +446,14 @@ def tag_skeleton(root):
         elbow = child_joints(shoulder)[0]
         tag_joint(elbow, side, 'Elbow')
 
+        if not hand:
+            hand = leaf_joint(shoulder, keyed=True)
+        else:
+            #do fingers
+            thumb = outlier_child(hand)
+            tag_joint(thumb, side, 'Thumb')
+
+            
 
     LfHip = None
     RtHip = None
@@ -458,6 +486,10 @@ def tag_skeleton(root):
 
         toe = child_joints(foot)[0]
         tag_joint(toe, side, 'Toe')
+
+
+    #fingers
+
 
     mc.select(hip)
     mm.eval('displayJointLabels 1;')
