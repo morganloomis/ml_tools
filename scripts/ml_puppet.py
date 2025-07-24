@@ -121,9 +121,6 @@ try:
 except ImportError:
     pass
 
-from importlib import reload
-reload(ml_match)
-
 PUP_ID_PREFIX = 'pupID_'
 CONTROL_ATTR = PUP_ID_PREFIX+'control'
 PUPPET_ATTR = PUP_ID_PREFIX+'puppet'
