@@ -136,7 +136,8 @@ Press the button to copy the skin weights.''')
         meshSel = []
         vtxSel = []
         for each in sel:
-            if '.vtx[' in each:
+            # Handle mesh vertices (.vtx), curve/surface CVs (.cv), and surface points (.pt)
+            if '.vtx[' in each or '.cv[' in each or '.pt[' in each:
                 vtxSel.append(each)
             else:
                 meshSel.append(each)
@@ -150,17 +151,67 @@ Press the button to copy the skin weights.''')
 
 
 def copySkinInfluences(source, dest):
-
+    """
+    Copy skin influences from source to destination geometry.
+    
+    For transforms with multiple nurbsCurve shapes, creates a skinCluster for each shape.
+    
+    Returns:
+        str or list: Single skinCluster name, or list of skinCluster names for multi-shape transforms.
+        Returns False if source has no skinCluster.
+    """
     sourceSkin = utl.getSkinCluster(source)
     if not sourceSkin:
         return False
 
     joints = mc.skinCluster(sourceSkin, query=True, influence=True)
 
+    # Get shapes from destination
+    shapes = []
+    if mc.objectType(dest) == 'transform':
+        shapes = mc.listRelatives(dest, shapes=True, noIntermediate=True, pa=True) or []
+    else:
+        shapes = [dest]
+    
+    if not shapes:
+        raise RuntimeError(f'No shapes found on destination: {dest}')
+    
+    # Check for multiple nurbsCurve shapes - each needs its own skinCluster
+    curveShapes = [s for s in shapes if mc.objectType(s) == 'nurbsCurve']
+    
+    if len(curveShapes) > 1:
+        # Multiple curve shapes - create skinCluster for each
+        destSkins = []
+        for curveShape in curveShapes:
+            existingSkin = utl.getSkinCluster(curveShape)
+            if not existingSkin:
+                skin = mc.skinCluster(joints, curveShape, toSelectedBones=True)[0]
+                destSkins.append(skin)
+            else:
+                # Add missing influences
+                destJoints = mc.skinCluster(existingSkin, query=True, influence=True)
+                for joint in [x for x in joints if x not in destJoints]:
+                    mc.skinCluster(existingSkin, edit=True, addInfluence=joint, lockWeights=False, weight=0)
+                destSkins.append(existingSkin)
+        return destSkins
+    
+    # Single shape or non-curve geometry - standard behavior
+    destShape = shapes[0]
+    shapeType = mc.objectType(destShape)
+    if shapeType not in ('mesh', 'nurbsCurve', 'nurbsSurface', 'lattice'):
+        raise RuntimeError(f'Unsupported geometry type for skinning: {shapeType}')
+    
     destSkin = utl.getSkinCluster(dest)
 
     if not destSkin:
-        destSkin = mc.skinCluster(joints, dest, toSelectedBones=True)[0]
+        # Create skinCluster - use the transform for the command
+        destTransform = dest
+        if mc.objectType(dest) != 'transform':
+            parents = mc.listRelatives(dest, parent=True)
+            if parents:
+                destTransform = parents[0]
+        
+        destSkin = mc.skinCluster(joints, destTransform, toSelectedBones=True)[0]
     else:
         destJoints = mc.skinCluster(destSkin, query=True, influence=True)
         for joint in [x for x in joints if x not in destJoints]:
@@ -171,8 +222,13 @@ def copySkinInfluences(source, dest):
 
 def copySkinComponents(source, destinationVerts):
 
-    if not mc.listRelatives(source, shapes=True):
+    shapes = mc.listRelatives(source, shapes=True, noIntermediate=True)
+    if not shapes:
         raise RuntimeError('Source object must be geometry.')
+    
+    shapeType = mc.objectType(shapes[0])
+    if shapeType not in ('mesh', 'nurbsCurve', 'nurbsSurface', 'lattice'):
+        raise RuntimeError(f'Unsupported source geometry type: {shapeType}')
 
     sourceSkin = utl.getSkinCluster(source)
 
@@ -197,16 +253,30 @@ def copySkinComponents(source, destinationVerts):
 
 
 def copySkinCluster(source, destination):
-
+    """
+    Copy skinCluster from source to destination geometry.
+    
+    Handles transforms with multiple nurbsCurve shapes by copying weights to each.
+    
+    Returns:
+        str or list: Single skinCluster name, or list of skinCluster names for multi-shape transforms.
+    """
     sourceSkin = utl.getSkinCluster(source)
     if not sourceSkin:
         raise RuntimeError("Source mesh doesn't have a skinCluster to copy from.")
 
     destSkin = copySkinInfluences(source, destination)
 
-    mc.copySkinWeights(sourceSkin=sourceSkin, destinationSkin=destSkin, noMirror=True,
-                       surfaceAssociation='closestPoint',
-                       influenceAssociation='closestJoint', normalize=True)
+    # Handle multiple skinClusters (from multi-shape nurbsCurve transforms)
+    if isinstance(destSkin, list):
+        for skin in destSkin:
+            mc.copySkinWeights(sourceSkin=sourceSkin, destinationSkin=skin, noMirror=True,
+                               surfaceAssociation='closestPoint',
+                               influenceAssociation='closestJoint', normalize=True)
+    else:
+        mc.copySkinWeights(sourceSkin=sourceSkin, destinationSkin=destSkin, noMirror=True,
+                           surfaceAssociation='closestPoint',
+                           influenceAssociation='closestJoint', normalize=True)
 
     return destSkin
 
@@ -215,9 +285,3 @@ def copySkinCluster(source, destination):
 if __name__ == '__main__':
     ui()
 
-#      ______________________
-# - -/__ Revision History __/- - - - - - - - - - - - - - - - - - - - - - - -
-#
-# Revision 1: 2016-10-31 : First publish.
-#
-# Revision 2: 2018-02-17 : Updating license to MIT.

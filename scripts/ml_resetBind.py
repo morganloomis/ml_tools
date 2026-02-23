@@ -117,10 +117,3 @@ def main():
 
 if __name__ == '__main__': main()
 
-
-#      ______________________
-# - -/__ Revision History __/- - - - - - - - - - - - - - - - - - - - - - - -
-#
-# Revision 1: 2014-03-02 : First publish.
-#
-# Revision 2: 2018-02-17 : Updating license to MIT.

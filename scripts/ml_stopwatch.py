@@ -376,15 +376,3 @@ The fields on the right can be used for notes.''', menu=False) as win:
 
 if __name__ == '__main__': ui()
 
-
-
-#      ______________________
-# - -/__ Revision History __/- - - - - - - - - - - - - - - - - - - - - - - -
-#
-# Revision 1: 2012-06-04 : First publish.
-#
-# Revision 2: 2014-03-01 : adding category
-#
-# Revision 3: 2016-05-01 : Fixing go to frame buttons import error.
-#
-# Revision 4: 2018-02-17 : Updating license to MIT.

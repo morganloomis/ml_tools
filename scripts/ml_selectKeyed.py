@@ -102,15 +102,3 @@ def main():
 
 if __name__ == '__main__': main()
 
-#      ______________________
-# - -/__ Revision History __/- - - - - - - - - - - - - - - - - - - - - - - -
-#
-# Revision 3: 2012-05-27 : Added revision notes, changed primary function to main() for consistency
-#
-# Revision 4: 2012-06-10 : Fixing small bug when selecting objects that aren't in a hierarchy.
-#
-# Revision 5: 2014-03-01 : adding category
-#
-# Revision 6: 2018-02-17 : Updating license to MIT.
-#
-# Revision 7: 2018-05-13 : shelf support

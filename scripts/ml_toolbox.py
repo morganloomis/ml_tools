@@ -575,17 +575,3 @@ class Tool(object):
 if __name__ == '__main__':
     main()
 
-#      ______________________
-# - -/__ Revision History __/- - - - - - - - - - - - - - - - - - - - - - - -
-#
-# Revision 1: 2016-01-31 : First publish.
-#
-# Revision 2: 2016-02-01 : Fixing Windows compatibility
-#
-# Revision 3: 2016-03-07 : more windows path support
-#
-# Revision 4: 2016-03-23 : Fixing slash bug in some windows cases.
-#
-# Revision 5: 2016-12-10 : Fixing print, and auto creation of __init__ files on windows.
-#
-# Revision 6: 2018-02-17 : Updating license to MIT.

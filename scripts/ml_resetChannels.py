@@ -138,21 +138,3 @@ def resetPuppetControl(*args):
 if __name__ == '__main__':
     resetPuppetControl()
 
-#      ______________________
-# - -/__ Revision History __/- - - - - - - - - - - - - - - - - - - - - - - -
-#
-# Revision 5: 2012-05-27 : Added revision notes, updated to use ml_utilities, changed primary function to main() for consistency
-#
-# Revision 6: 2013-04-23 : added transformsOnly and selected flags to support cgMonks
-#
-# Revision 7: 2014-03-01 : adding category
-#
-# Revision 8: 2015-05-14 : Added excludeChannels argument.
-#
-# Revision 9: 2015-05-16 : argument update in order to be supported in puppet context menu.
-#
-# Revision 10: 2018-02-17 : Updating license to MIT.
-#
-# Revision 11: 2018-05-13 : shelf support
-#
-# Revision 12: 2018-06-04 : bug fix for nodes with no keyable channels

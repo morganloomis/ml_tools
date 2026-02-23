@@ -154,15 +154,3 @@ class KeyValueDragger(utl.Dragger):
             for i,v in zip(self.time[curve], self.value[curve]):
                 mc.keyframe(curve, time=(i,), valueChange=self.default[curve]+((v-self.default[curve])*self.x))
 
-
-
-#      ______________________
-# - -/__ Revision History __/- - - - - - - - - - - - - - - - - - - - - - - -
-#
-# Revision 2: 2014-03-01 : Added revision notes, adding category
-#
-# Revision 3: 2016-05-01 : Bug fix
-#
-# Revision 4: 2016-05-02 : Actual bug fix
-#
-# Revision 5: 2018-05-14 : Shelf support.

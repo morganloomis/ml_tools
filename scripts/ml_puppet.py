@@ -79,6 +79,7 @@ import maya.mel as mm
 from functools import partial
 import math, re, warnings, os
 
+
 try:
     import ml_utilities as utl
     utl.upToDateCheck(35)
@@ -499,7 +500,14 @@ def puppetContextMenu(parent, node):
         mc.menuItem(label='Reset Control'+append, command=ml_resetChannels.resetPuppetControl)
         mc.menuItem(divider=True)
 
+    mc.menuItem(label='Mirroring', subMenu=True)
+    mc.menuItem(label='Mirror Pose', command=partial(mirrorPose,None))
+    mc.menuItem(label='Flip Pose', command=partial(flipPose,None))
+    mc.menuItem(label='Mirror Animation', command=partial(mirrorAnimation,None))
+    mc.menuItem(label='Flip Animation', command=partial(flipAnimation,None))
 
+    mc.setParent(parent, menu=True)
+    
     #rotate order
     if ml_convertRotationOrder and mc.getAttr(node+'.rotateOrder', channelBox=True):
         roo = mc.getAttr(node+'.rotateOrder')
@@ -561,6 +569,7 @@ def puppetContextMenu(parent, node):
     
     labels = [x[0] for x in menu.keys()]
     labelsUnique = len(labels) == len(set(labels))
+    
     for menuData in menu.keys():
         #figure the label based on the number of unique things selected
         #two identical labels can have different value lists, so they need to prefixed.
@@ -576,36 +585,45 @@ def puppetContextMenu(parent, node):
             label = prefix+label
         
         mc.menuItem(label=label, subMenu=True)
-        system = systems[0]
+        first_system = systems[0]
 
         currentValue = None
         value = None
-        values = [mc.getAttr(system.system+'.driver') for system in systems]
+        values = [mc.getAttr(s.system+'.driver') for s in systems]
         allEqual = values.count(values[0]) == len(values)
 
-        currentValue = mc.getAttr(system.system+'.driver')
+        currentValue = mc.getAttr(first_system.system+'.driver')
         
         # -------------------------------------------
         mc.menuItem(label='Switch Current', subMenu=True)
         for i, each in enumerate(menuData[1:]):
             if allEqual and i == currentValue: #need to take into account min
                 continue
-            mc.menuItem(label=each, command=partial(do_match_current, system, i))
+            mc.menuItem(label=each, command=partial(do_match_current, systems, i))
         mc.setParent('..', menu=True)
 
         # -------------------------------------------
         mc.menuItem(label='Switch Range', subMenu=True)
         for i, each in enumerate(menuData[1:]):
-            mc.menuItem(label=each, command=partial(do_match_range, system, i))
+            mc.menuItem(label=each, command=partial(do_match_range, systems, i))
         mc.setParent('..', menu=True)
     
         mc.setParent('..', menu=True)
     
-def do_match_current(system, toValue, *args):
-    system.match_current(toValue)
+def do_match_current(systems, toValue, *args):
+    '''Run fk/ik or space switch on current frame for one or more match systems.'''
+    if not isinstance(systems, (list, tuple)):
+        systems = [systems]
+    for system in systems:
+        system.match_current(toValue)
 
-def do_match_range(system, toValue, *args):
-    system.match_range(toValue)
+
+def do_match_range(systems, toValue, *args):
+    '''Run fk/ik or space switch over frame range for one or more match systems.'''
+    if not isinstance(systems, (list, tuple)):
+        systems = [systems]
+    for system in systems:
+        system.match_range(toValue)
 
 def match_fk_range(*args):
     match_selected(0, range=True)
@@ -652,11 +670,11 @@ Any control affected by the fk/ik system will do.''') as win:
     
         win.buttonWithPopup(label='Match Current FK', command=match_fk_current, annotation='Match to FK over range.',
                             shelfLabel='fk', shelfIcon='ikEffector')
-        win.buttonWithPopup(label='Match Current IK', command=match_ik_current, annotation='Match to FK over range.',
+        win.buttonWithPopup(label='Match Current IK', command=match_ik_current, annotation='Match to IK over range.',
                             shelfLabel='ik', shelfIcon='ikEffector')
         win.buttonWithPopup(label='Match Range FK', command=match_fk_range, annotation='Match to FK over range.',
                             shelfLabel='fk', shelfIcon='ikEffector')
-        win.buttonWithPopup(label='Match Range IK', command=match_ik_range, annotation='Match to FK over range.',
+        win.buttonWithPopup(label='Match Range IK', command=match_ik_range, annotation='Match to IK over range.',
                             shelfLabel='ik', shelfIcon='ikEffector')
 
 
@@ -1033,16 +1051,21 @@ def FBX_export(filename, selection=True, **kwargs):
         #kwargs['fileVersion'] = 'FBX202000'
     if not 'generateLog' in kwargs:
         kwargs['generateLog'] = False
-    
+    if kwargs.get('skins', False) and utl.MAYA_VERSION >= 2024:
+        kwargs['inputConnections'] = True
+        
+
+    mm.eval('FBXResetExport')
     for k,v in kwargs.items():
         if isinstance(v, bool):
             v = str(v).lower()
         elif isinstance(v, str):
             v = '"'+v+'"'
-        cmd = 'FBXExport{}{} -v {}'.format(k[0].upper(), k[1:], v)
+        cmd = f'FBXExport{k[0].upper()}{k[1:]} -v {v}'
+        print(cmd)
         mm.eval(cmd)
     
-    cmd = 'FBXExport -f "{}"'.format(filename)
+    cmd = f'FBXExport -f "{filename}"'
     if selection:
         cmd+=' -s'
     print(cmd)
@@ -1196,15 +1219,187 @@ class Skeleton(object):
 
 
     def update_skeleton(self):
-        #add missing joint
-        #update parenting
-        #remove lost joints (unparent if skinned)
-        pass
+        """
+        Update existing skeleton to match current skeleton node data.
+        
+        - Creates new joints if they don't exist
+        - Reparents joints if hierarchy has changed
+        - For removed joints: deletes if not skinned, otherwise parents to world
+          and removes skeleton attributes
+        """
+        # Re-initialize from skeleton nodes to get current data
+        self._entries = {}
+        self.roots = []
+        self.init_skeletonNodes()
+        
+        # Get all existing skeleton joints in scene
+        existing_joints = mc.ls('*.'+JOINT_WORLD_MATRIX_ATTR, o=True, type='joint') or []
+        existing_joint_names = set(j.split('|')[-1] for j in existing_joints)
+        
+        # Get all joint names that should exist according to data
+        target_joint_names = set(self._entries.keys())
+        
+        # Joints to create (in data but not in scene)
+        joints_to_create = target_joint_names - existing_joint_names
+        
+        # Joints to remove (in scene but not in data)
+        joints_to_remove = existing_joint_names - target_joint_names
+        
+        # Joints to check for reparenting (exist in both)
+        joints_to_check = target_joint_names & existing_joint_names
+        
+        # Step 1: Create missing joints
+        for name in joints_to_create:
+            entry = self._entries[name]
+            entry.create_joint()
+            print(f"Created joint: {name}")
+        
+        # Step 2: Parent new joints and check/fix hierarchy of existing joints
+        for name in target_joint_names:
+            entry = self._entries[name]
+            
+            # Make sure joint reference is set for existing joints
+            if not entry.joint and mc.objExists(name):
+                for node in mc.ls(name, type='joint'):
+                    entry.joint = node
+                    break
+            
+            if not entry.joint:
+                continue
+                
+            # Determine correct parent
+            target_parent = None
+            if entry.parent and entry.parent.name:
+                target_parent = entry.parent.name
+            
+            # Get current parent
+            current_parent = mc.listRelatives(entry.joint, parent=True, pa=True)
+            current_parent_name = current_parent[0].split('|')[-1] if current_parent else None
+            
+            # Reparent if needed
+            if target_parent != current_parent_name:
+                if target_parent and mc.objExists(target_parent):
+                    entry.joint = mc.parent(entry.joint, target_parent)[0]
+                    entry.joint = mc.rename(entry.joint, name)
+                    print(f"Reparented joint: {name} -> {target_parent}")
+                elif not target_parent and current_parent:
+                    # Should be a root joint
+                    entry.joint = mc.parent(entry.joint, world=True)[0]
+                    entry.joint = mc.rename(entry.joint, name)
+                    print(f"Unparented joint to world: {name}")
+                    
+                if not entry.parent:
+                    self.roots.append(entry)
+        
+        # Step 3: Handle removed joints
+        for name in joints_to_remove:
+            # Find the joint
+            joints = [j for j in existing_joints if j.split('|')[-1] == name]
+            if not joints:
+                continue
+            joint = joints[0]
+            
+            # Check if skinned
+            is_skinned = False
+            skin_connections = mc.listConnections(
+                f'{joint}.worldMatrix[0]', 
+                source=False, 
+                destination=True, 
+                type='skinCluster'
+            )
+            if skin_connections:
+                is_skinned = True
+            
+            if is_skinned:
+                # Parent to world and remove skeleton attributes
+                parent = mc.listRelatives(joint, parent=True, pa=True)
+                if parent:
+                    mc.parent(joint, world=True)
+                
+                # Disconnect and remove skeleton attributes
+                if mc.attributeQuery(JOINT_WORLD_MATRIX_ATTR, node=joint, exists=True):
+                    connections = mc.listConnections(
+                        f'{joint}.{JOINT_WORLD_MATRIX_ATTR}', 
+                        source=True, 
+                        destination=False, 
+                        plugs=True
+                    )
+                    if connections:
+                        mc.disconnectAttr(connections[0], f'{joint}.{JOINT_WORLD_MATRIX_ATTR}')
+                    mc.deleteAttr(joint, attribute=JOINT_WORLD_MATRIX_ATTR)
+                
+                if mc.attributeQuery(JOINT_PREBIND_MATRIX_ATTR, node=joint, exists=True):
+                    connections = mc.listConnections(
+                        f'{joint}.{JOINT_PREBIND_MATRIX_ATTR}', 
+                        source=True, 
+                        destination=False, 
+                        plugs=True
+                    )
+                    if connections:
+                        mc.disconnectAttr(connections[0], f'{joint}.{JOINT_PREBIND_MATRIX_ATTR}')
+                    mc.deleteAttr(joint, attribute=JOINT_PREBIND_MATRIX_ATTR)
+                
+                # Disconnect transform connections
+                for attr in ['translate', 'rotate', 'scale']:
+                    connections = mc.listConnections(
+                        f'{joint}.{attr}', 
+                        source=True, 
+                        destination=False, 
+                        plugs=True
+                    )
+                    if connections:
+                        for conn in connections:
+                            try:
+                                mc.disconnectAttr(conn, f'{joint}.{attr}')
+                            except RuntimeError:
+                                pass
+                
+                print(f"Removed from skeleton (skinned - kept in scene): {name}")
+            else:
+                # Not skinned, safe to delete
+                # First reparent children to this joint's parent
+                children = mc.listRelatives(joint, children=True, pa=True, type='joint')
+                parent = mc.listRelatives(joint, parent=True, pa=True)
+                
+                if children:
+                    for child in children:
+                        if parent:
+                            mc.parent(child, parent[0])
+                        else:
+                            mc.parent(child, world=True)
+                
+                mc.delete(joint)
+                print(f"Deleted joint: {name}")
+        
+        # Step 4: Reconnect joints that may have lost connections
+        for name in joints_to_check:
+            entry = self._entries.get(name)
+            if not entry or not entry.joint:
+                continue
+            
+            # Check if already connected
+            if mc.attributeQuery(JOINT_WORLD_MATRIX_ATTR, node=entry.joint, exists=True):
+                existing_conn = mc.listConnections(
+                    f'{entry.joint}.{JOINT_WORLD_MATRIX_ATTR}', 
+                    source=True, 
+                    destination=False
+                )
+                if existing_conn:
+                    continue  # Already connected
+            
+            # Connect if not connected
+            entry.connect_joint()
+            print(f"Reconnected joint: {name}")
+        
+        mc.dgdirty(a=True)
+        
+        return {
+            'created': list(joints_to_create),
+            'removed': list(joints_to_remove),
+            'updated': list(joints_to_check)
+        }
 
 
-
-    
-    
 class SkeletonEntry(object):
     '''
     Data point representing a joint in a skeleton hierarchy, before and after it is created.
@@ -1385,8 +1580,9 @@ class SkeletonEntry(object):
                         self._localMatrix = b
 
         if not self._localMatrix:
-
-            mc.addAttr(self.joint, ln=JOINT_WORLD_MATRIX_ATTR, dt='matrix', keyable=True)
+            try:
+                mc.addAttr(self.joint, ln=JOINT_WORLD_MATRIX_ATTR, dt='matrix', keyable=True)
+            except: pass
             mc.connectAttr(self.plug, '{}.{}'.format(self.joint, JOINT_WORLD_MATRIX_ATTR))
 
             self._localMatrix = mc.createNode('multMatrix', name='{}_localMatrix'.format(self.name))
@@ -1395,8 +1591,9 @@ class SkeletonEntry(object):
             
             #prebind matrix
             if mc.objExists(self.rest) and mc.listConnections(self.rest, source=True, destination=False):
-                mc.addAttr(self.joint, ln=JOINT_PREBIND_MATRIX_ATTR, dt='matrix', keyable=True)
-                
+                try:
+                    mc.addAttr(self.joint, ln=JOINT_PREBIND_MATRIX_ATTR, dt='matrix', keyable=True)
+                except: pass
                 self._preBindInverse = mc.createNode('inverseMatrix', name='{}_preBindInverse'.format(self.name))
                 mc.connectAttr(self.rest, f'{self._preBindInverse}.inputMatrix')
                 mc.connectAttr(f'{self._preBindInverse}.outputMatrix', f'{self.joint}.{JOINT_PREBIND_MATRIX_ATTR}')
@@ -1474,6 +1671,21 @@ def add_skeleton(includeBlendshapes=False):
     skel.connect_skin()
 
 
+def update_skeleton():
+    """
+    Update existing skeleton to match current skeleton node data.
+    More efficient than remove_skeleton + add_skeleton as it only
+    modifies what has changed.
+    
+    Returns:
+        dict: Summary of changes with keys 'created', 'removed', 'updated'
+    """
+    skel = Skeleton()
+    result = skel.update_skeleton()
+    skel.connect_skin()
+    return result
+
+
 def remove_skeleton():
     '''
     '''
@@ -1512,6 +1724,15 @@ def remove_skeleton():
 def is_skeleton(node):
     return mc.attributeQuery(SKELETON_NODE_ATTR, exists=True, node=node)
 
+def get_skeleton_from_joint(joint):
+
+    if not mc.attributeQuery(JOINT_WORLD_MATRIX_ATTR, exists=True, node=joint):
+        return None
+    skel = mc.listConnections(f'{joint}.{JOINT_WORLD_MATRIX_ATTR}', source=True, destination=False)
+    if skel and is_skeleton(skel[0]):
+        return skel[0]
+    return None
+    
 
 def get_skeleton_joint_name(jointOrPlug):
     jointOrPlug = str(jointOrPlug)
@@ -1552,53 +1773,3 @@ def filter_graphEditor():
     mc.outlinerEditor('graphEditor1OutlineEd', e=True, attrFilter=filter, ignoreHiddenAttribute=True)
     mm.eval('AEdagNodeCommonRefreshOutliners();')
 
-#      ______________________
-# - -/__ Revision History __/- - - - - - - - - - - - - - - - - - - - - - - -
-#
-# Revision 1: 2013-03-10 : First publish, fkIk switching only.
-#
-# Revision 2: 2014-02-24 : Added selection scripts, UI, and updated for latest version of Puppeteer.
-#
-# Revision 3: 2014-03-01 : adding category
-#
-# Revision 4: 2015-04-27 : First major support for puppet marking menu.
-#
-# Revision 5: 2015-04-27 : temp node clean up bug fixed.
-#
-# Revision 6: 2015-05-14 : Space switch bake bug fixed.
-#
-# Revision 7: 2015-05-18 : Minor bugfixes.
-#
-# Revision 8: 2015-06-23 : puppet context menu fix for windows paths
-#
-# Revision 9: 2015-11-18 : Updated fk ik switching code for latest puppeteer
-#
-# Revision 10: 2016-09-25 : Minor KeyError bug fix.
-#
-# Revision 11: 2017-02-08 : zero out pole twist when matching to ik
-#
-# Revision 12: 2017-02-21 : fixing stepped tangents on ik switch attribute
-#
-# Revision 13: 2017-03-28 : mirroring and visibility sets
-#
-# Revision 14: 2017-03-28 : removing hide all sets, maya not allow
-#
-# Revision 15: 2017-04-06 : Context menu bug fixes and additional features.
-#
-# Revision 16: 2017-04-23 : Space Switch context menu bug fix
-#
-# Revision 17: 2017-04-25 : FK IK switching keying update
-#
-# Revision 18: 2017-05-24 : search higher for mirrored nodes when matching
-#
-# Revision 19: 2017-06-04 : adding puppet settings attributes
-#
-# Revision 20: 2017-06-13 : space switch matching bug fix
-#
-# Revision 21: 2017-06-29 : full context menu for puppet node
-#
-# Revision 22: 2017-06-30 : proper testing for puppet
-#
-# Revision 23: 2017-07-07 : space switch and mirroring bugs
-#
-# Revision 24: 2018-02-17 : Updating license to MIT.

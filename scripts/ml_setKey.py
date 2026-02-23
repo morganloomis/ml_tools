@@ -180,21 +180,3 @@ def setKey(deleteSubFrames=False, insert=False, selectedChannels=False, visibleI
 
 if __name__ == '__main__': ui()
 
-#      ______________________
-# - -/__ Revision History __/- - - - - - - - - - - - - - - - - - - - - - - -
-#
-# Revision 4: 2012-03-11 : Added revision notes, updated to use ml_utilities, fixed a bug where tangents weren't being preserved, and fixed middle-mouse dragging.
-#
-# Revision 5: 2012-03-26 : Updated delete sub-frame option to work with other frame rates
-#
-# Revision 6: 2012-07-23 : Bug fixes.
-#
-# Revision 7: 2012-08-07 : Updating in parallel with ml_utilities to fix bug with keying keyed shapes.
-#
-# Revision 8: 2012-11-19 : updating to new KeySelection
-#
-# Revision 9: 2014-03-01 : adding category
-#
-# Revision 10: 2018-02-17 : Updating license to MIT.
-#
-# Revision 11: 2018-05-13 : shelf support

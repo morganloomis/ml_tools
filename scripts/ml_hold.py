@@ -308,17 +308,3 @@ def holdRange(current=False, average=False):
 if __name__ == '__main__':
     ui()
 
-#      ______________________
-# - -/__ Revision History __/- - - - - - - - - - - - - - - - - - - - - - - -
-#
-# Revision 1: : First publish
-#
-# Revision 4: 2011-05-01 : Updated to use ml_utilities
-#
-# Revision 5: 2014-03-01 : adding category
-#
-# Revision 6: 2015-01-10 : Fixed bug relating to KeySelection
-#
-# Revision 7: 2018-02-17 : Updating license to MIT.
-#
-# Revision 8: 2018-05-13 : shelf support

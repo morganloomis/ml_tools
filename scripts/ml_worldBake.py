@@ -362,27 +362,3 @@ if __name__ == '__main__':
     #matchBakeLocators(constrainSource=True)
     ui()
 
-#      ______________________
-# - -/__ Revision History __/- - - - - - - - - - - - - - - - - - - - - - - -
-#
-# Revision 1: : First publish
-#
-# Revision 6: : Updated to use ml_utilities. Changed from direct constraint to constrained duplicate node.
-#
-# Revision 7: 2011-05-13 : fixed a bug with transferring certain types of tangents.
-#
-# Revision 8: 2011-05-14 : fixed error baking things with transforms locked or hidden
-#
-# Revision 9: 2012-06-13 : fixing duplicate name bug, adding more error checking.
-#
-# Revision 10: 2012-11-15 : Converting UI to tabs, adding camera and explicit options.
-#
-# Revision 11: 2014-03-01 : adding category
-#
-# Revision 12: 2015-05-14 : Baking broken out and moved to ml_utilities
-#
-# Revision 13: 2018-02-17 : Updating license to MIT.
-#
-# Revision 14: 2018-06-27 : parenting options and marking menu
-#
-# Revision 15: 2018-07-18 : marking menu

@@ -152,7 +152,7 @@ def copySingle(source=None, destination=None, pasteMethod='replace', offset=0, a
         #mc.select(sel)
 
 
-def copyHierarchy(sourceTop=None, destinationTop=None, pasteMethod='replace', offset=0, addToLayer=False, layerName=None, rotateOrder=True, setStatic=True):
+def copyHierarchy(sourceTop=None, destinationTop=None, pasteMethod='replace', offset=0, addToLayer=False, layerName=None, rotateOrder=True):
     '''
     Copy animation from a source hierarchy and paste it to a destination hierarchy.
     '''
@@ -215,12 +215,12 @@ def copyHierarchy(sourceTop=None, destinationTop=None, pasteMethod='replace', of
             print('Cannot find destination node: '+destNS+nodeName)
             continue
 
-        copyAnimation(source=node, destination=destNodeMap[nodeName], pasteMethod=pasteMethod, offset=offset, start=start, end=end, layer=layer, rotateOrder=rotateOrder, setStatic=setStatic)
+        copyAnimation(source=node, destination=destNodeMap[nodeName], pasteMethod=pasteMethod, offset=offset, start=start, end=end, layer=layer, rotateOrder=rotateOrder)
 
 #     if sel:
 #         mc.select(sel)
 
-def copyAnimation(source=None, destination=None, pasteMethod='replace', offset=0, start=None, end=None, layer=None, rotateOrder=True, setStatic=True):
+def copyAnimation(source=None, destination=None, pasteMethod='replace', offset=0, start=None, end=None, layer=None, rotateOrder=True):
     '''
     Actually do the copy and paste from one node to another. If start and end frame is specified,
     set a temporary key before copying, and delete it afterward.
@@ -238,18 +238,11 @@ def copyAnimation(source=None, destination=None, pasteMethod='replace', offset=0
         for each in destination:
             utl.minimizeRotationCurves(each)
 
-    if setStatic:
-        for each in destination:
-            attrs = [x.split('.', 1)[-1] for x in mc.listAnimatable(each) or []]
-            attrs.extend(mc.listAttr(each, channelBox=True) or [])
-            for attr in attrs:
-                try:
-                    mc.setAttr(each+'.'+attr, mc.getAttr(source+'.'+attr))
-                except:pass
     if rotateOrder:
         for each in destination:
             try:
-                mc.setAttr(each+'.rotateOrder', mc.getAttr(source+'.rotateOrder'))
+                if mc.getAttr(each+'.rotateOrder', keyable=True):
+                    mc.setAttr(each+'.rotateOrder', mc.getAttr(source+'.rotateOrder'))
             except:pass
 
     if pasteMethod=='replaceCompletely' or not start or not end:
@@ -317,24 +310,3 @@ def markingMenu():
 
 if __name__ == '__main__': ui()
 
-
-#      ______________________
-# - -/__ Revision History __/- - - - - - - - - - - - - - - - - - - - - - - -
-#
-# Revision 1: 2012-03-14 : First publish.
-#
-# Revision 2: 2012-11-06 : Adding layer option.
-#
-# Revision 3: 2012-11-28 : remove debug print
-#
-# Revision 4: 2014-03-01 : Adding category and fixing bad argument name.
-#
-# Revision 5: 2017-07-19 : support for non-namespaced hierarchies, transferring rotateOrder.
-#
-# Revision 6: 2018-02-17 : Updating license to MIT.
-#
-# Revision 7: 2018-05-06 : Copy to multiple, shelf support.
-#
-# Revision 8: 2018-05-13 : shelf support
-#
-# Revision 9: 2018-06-27 : bug fix for rotateOrder

@@ -584,27 +584,3 @@ def markingMenu():
 
 if __name__ == '__main__':ui()
 
-#      ______________________
-# - -/__ Revision History __/- - - - - - - - - - - - - - - - - - - - - - - -
-#
-# Revision 1: 2011-05-01 : First publish
-#
-# Revision 2: 2011-05-14 : minor bug fix involving error with duplicate names
-#
-# Revision 3: 2011-05-14 : Revision notes update.
-#
-# Revision 4: 2014-03-01 : adding category
-#
-# Revision 5: 2016-12-10 : removing euclid dependency
-#
-# Revision 6: 2017-06-30 : Fixing bug with moving cameras, adding line width
-#
-# Revision 7: 2018-02-17 : Updating license to MIT.
-#
-# Revision 8: 2018-04-09 : Test for accuracy to determine whether the fast solution is accurate.
-#
-# Revision 9: 2018-05-05 : Adding shelf support.
-#
-# Revision 10: 2018-05-06 : Added marking menu.
-#
-# Revision 11: 2018-05-13 : shelf support

@@ -336,15 +336,3 @@ def convertTo(roo='zxy'):
 
 if __name__ == '__main__': ui()
 
-#      ______________________
-# - -/__ Revision History __/- - - - - - - - - - - - - - - - - - - - - - - -
-#
-# Revision 1: 2011-10-08 : First publish.
-#
-# Revision 2: 2012-03-12 : Updated to work with non-keyed objects, added the tips button.
-#
-# Revision 3: 2012-08-04 : Fixing bug with potential duplicate temp name.
-#
-# Revision 4: 2014-03-01 : adding category
-#
-# Revision 5: 2018-02-17 : Updating license to MIT.

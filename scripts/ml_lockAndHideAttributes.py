@@ -179,11 +179,3 @@ def setAttributeState(lock=None, hide=None):
                     mc.setAttr(obj+'.'+attr, **kwargs)
                 except Exception: pass
 
-#      ______________________
-# - -/__ Revision History __/- - - - - - - - - - - - - - - - - - - - - - - -
-#
-# Revision 1: 2011-10-08 : First publish.
-#
-# Revision 2: 2014-03-01 : adding category
-#
-# Revision 3: 2018-02-17 : Updating license to MIT.

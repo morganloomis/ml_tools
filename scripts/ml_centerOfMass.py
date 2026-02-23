@@ -571,9 +571,3 @@ def getMaxInfluenceMap(model):
 
     return weights
 
-#      ______________________
-# - -/__ Revision History __/- - - - - - - - - - - - - - - - - - - - - - - -
-#
-# Revision 1: 2016-12-05 : First publish.
-#
-# Revision 2: 2018-02-17 : Updating license to MIT.

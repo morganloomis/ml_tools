@@ -189,24 +189,3 @@ def deleteChannels():
 
 if __name__ == '__main__': ui()
 
-
-#      ______________________
-# - -/__ Revision History __/- - - - - - - - - - - - - - - - - - - - - - - -
-#
-# Revision 1: 2012-03-29 : First publish.
-#
-# Revision 2: 2012-03-29 : Fixing bugs, published first version too quickly!
-#
-# Revision 3: 2012-04-14 : minor bug fix
-#
-# Revision 4: 2012-07-23 : Split into keys and channels, updated to use latest ml_utilities scripts, bug fixes.
-#
-# Revision 5: 2012-07-23 : Fixing argument for KeySelection
-#
-# Revision 6: 2012-11-19 : updated to new KeySelection
-#
-# Revision 7: 2014-03-01 : adding category
-#
-# Revision 8: 2018-02-17 : Updating license to MIT.
-#
-# Revision 9: 2018-05-13 : shelf support

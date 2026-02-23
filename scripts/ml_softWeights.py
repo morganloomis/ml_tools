@@ -200,10 +200,3 @@ def softSelectionSkinWeights(*args):
 
     mc.select(joint)
 
-
-#      ______________________
-# - -/__ Revision History __/- - - - - - - - - - - - - - - - - - - - - - - -
-#
-# Revision 1: 2016-12-31 : Initial publish
-#
-# Revision 2: 2018-02-17 : Updating license to MIT.

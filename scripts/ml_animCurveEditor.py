@@ -81,8 +81,8 @@ shelfButton = {'annotation': 'Open an UI to edit animation curves in bulk.',
 import maya.cmds as mc
 from maya import OpenMaya
 
+import bisect
 import itertools
-from functools import partial
 
 try:
     import ml_utilities as utl
@@ -286,23 +286,9 @@ change tabs to choose options related to that function.''') as win:
                            )
         mc.setParent('..')
 
-        #                   ______
-        #__________________/ Swap \_________________
-        tab6 = mc.columnLayout(adj=True)
-
-        mc.separator(height=8, style='none')
-        mc.text('Swap rotation curves when orientation changes.')
-        mc.separator(height=16, style='in')
-
-        win.ButtonWithPopup(label='X <-> Y', command=partial(swap, True,  True,  False), annotation='Swap X and Y curves')
-        win.ButtonWithPopup(label='X <-> Z', command=partial(swap, True,  False, True),  annotation='Swap X and Z curves')
-        win.ButtonWithPopup(label='Y <-> Z', command=partial(swap, False, True,  True),  annotation='Swap Y and Z curves')
-        mc.setParent('..')
-
-
         #                         __________
         #________________________/ Clean Up \_________
-        tab7 = mc.columnLayout(adj=True)
+        tab6 = mc.columnLayout(adj=True)
 
         mc.separator(height=8, style='none')
         mc.text('Various tools for deleting keys.')
@@ -322,14 +308,51 @@ change tabs to choose options related to that function.''') as win:
                             readUI_toArgs={'selectionOption':'ml_animCurveEditor_selection_menu'},
                             annotation="Delete keys that aren't on a whole-number frame."
                             )
+        mc.setParent('..')
+
+        #                         __________
+        #________________________/ Reduce \_________
+        tab7 = mc.columnLayout(adj=True)
+
+        mc.separator(height=8, style='none')
+        mc.text('Reduce keyframes on dense animation while maintaining motion.')
+        mc.text('All channels on each node will be synchronized to the same frames.')
+        mc.text('Drag slider to preview, changes apply when you release or change selection.')
+        mc.separator(height=16, style='in')
+
+        mc.intSliderGrp('ml_animCurveEditor_reduceCompression_slider',
+                        label='Compression %', field=True, value=0,
+                        minValue=0, maxValue=100,
+                        dragCommand=_onReduceSliderDrag,
+                        changeCommand=_onReduceSliderChange,
+                        annotation='Drag to interactively reduce keyframes. 0 = no change, 100 = only first/last keys')
+
+        mc.button(label='Reset', command=lambda *args: _keyframeReducer.reset(),
+                  annotation='Reset to original keyframes')
+        mc.setParent('..')
+
+        #                    ___________
+        #___________________/ Spline \___
+        tab8 = mc.columnLayout(adj=True)
+
+        mc.separator(height=8, style='none')
+        mc.text('Unify keytimes across selected nodes, then convert to spline interpolation.')
+        mc.separator(height=16, style='in')
+
+        win.ButtonWithPopup(label='Convert Stepped to Spline', command=convertSteppedToSpline,
+                            name='ml_animCurveEditor',
+                            readUI_toArgs={'selectionOption': 'ml_animCurveEditor_selection_menu'},
+                            annotation='Unify keytimes so every node has a key on every frame that any node has a key; then set tangents to spline.')
+        mc.setParent('..')
 
         mc.tabLayout( tabs, edit=True, tabLabel=((tab1, 'Offset'),
                                                 (tab2, 'Cut'),
                                                 (tab3, 'Scale Time'),
                                                 (tab4, 'Scale Value'),
                                                 (tab5, 'Clamp'),
-                                                (tab6, 'Swap'),
-                                                (tab7, 'Clean Up')
+                                                (tab6, 'Clean Up'),
+                                                (tab7, 'Reduce'),
+                                                (tab8, 'Spline')
                                                 ))
 
 
@@ -552,40 +575,293 @@ def deleteSubFrameKeys(selectionOption=1):
             mc.cutKey(curve, time=utl.castToTime(cutTimes))
 
 
-def swap(x=False, y=False, z=False):
+def convertSteppedToSpline(selectionOption=1):
+    """
+    Unify keytimes across selected nodes: for any frame that has a key on any node,
+    set a key on all nodes at that frame (hold/stepped). Then convert all keys to spline.
+    """
+    keySel = _getKeySelection(selectionOption)
+    if not keySel.curves:
+        OpenMaya.MGlobal.displayWarning('No animation curves found.')
+        return
 
-    if int(x) + int(y) + int(z) != 2:
-        raise RuntimeError('Two True args required.')
+    all_times = keySel.getSortedKeyTimes()
+    if not all_times:
+        return
 
-    sel = mc.ls(sl=True)
+    for curve in keySel.curves:
+        existing = set(mc.keyframe(curve, query=True, timeChange=True) or [])
+        missing = [t for t in all_times if t not in existing]
+        if missing:
+            mc.setKeyframe(curve, time=utl.castToTime(missing), insert=True)
 
-    attrA = 'rx' if x else 'ry'
-    attrB = 'rz' if z else 'ry'
+    mc.keyTangent(keySel.curves, itt='spline', ott='spline')
 
 
-    for each in sel:
-        a = mc.listConnections('{}.{}'.format(each, attrA), type='animCurve')
-        b = mc.listConnections('{}.{}'.format(each, attrB), type='animCurve')
-        if not a and b:
-            continue
-        mc.connectAttr('{}.output'.format(a[0]), '{}.{}'.format(each, attrB), force=True)
-        mc.connectAttr('{}.output'.format(b[0]), '{}.{}'.format(each, attrA), force=True)
+class KeyframeReducer:
+    """
+    Manages interactive keyframe reduction with cached state.
+    Pre-computes importance order so slider dragging is instant.
+    """
+    
+    def __init__(self):
+        self.reset_state()
+        self._selection_job = None
+    
+    def reset_state(self):
+        """Clear all cached state."""
+        self.initialized = False
+        self.curves_by_node = {}
+        self.original_data = {}  # {curve: {time: value}}
+        self.importance_order = {}  # {node: [times ordered by importance, least important first]}
+        self.all_times_by_node = {}  # {node: set of all times}
+        self.current_compression = 0
+    
+    def initialize(self, selectionOption):
+        """
+        Cache current keyframe data and pre-compute importance order.
+        Call this before interactive editing begins.
+        """
+        # Clean up redundant keys first
+        deleteRedundantKeys(selectionOption)
+        
+        keySel = _getKeySelection(selectionOption)
+        if not keySel.curves:
+            OpenMaya.MGlobal.displayWarning('No animation curves found.')
+            return False
+        
+        self.reset_state()
+        
+        # Group curves by their source node
+        for curve in keySel.curves:
+            connections = mc.listConnections(curve, destination=True, source=False, plugs=True)
+            if connections:
+                node = connections[0].split('.')[0]
+                if node not in self.curves_by_node:
+                    self.curves_by_node[node] = []
+                self.curves_by_node[node].append(curve)
+        
+        # For each node, cache data and compute importance order
+        for node, curves in self.curves_by_node.items():
+            self._cache_and_compute_importance(node, curves)
+        
+        self.initialized = True
+        
+        # Set up selection change callback to finalize
+        if self._selection_job is not None:
+            try:
+                mc.scriptJob(kill=self._selection_job, force=True)
+            except:
+                pass
+        self._selection_job = mc.scriptJob(event=['SelectionChanged', self._on_selection_changed], runOnce=True)
+        
+        return True
+    
+    def _cache_and_compute_importance(self, node, curves):
+        """
+        Cache keyframe data and compute importance order for one node's curves.
+        Optimized with bisect for O(log n) segment lookup and incremental sorted list.
+        """
+        all_times = set()
+        curve_data = {}
+        curve_ranges = {}
+        
+        # Batch query all curve data
+        for curve in curves:
+            times = mc.keyframe(curve, query=True, timeChange=True)
+            if times:
+                all_times.update(times)
+                values = mc.keyframe(curve, query=True, valueChange=True)
+                time_value_map = dict(zip(times, values))
+                curve_data[curve] = time_value_map
+                self.original_data[curve] = dict(time_value_map)  # Copy for reset
+                min_val, max_val = min(values), max(values)
+                curve_ranges[curve] = max(max_val - min_val, 0.0001)
+        
+        if len(all_times) <= 2:
+            self.all_times_by_node[node] = all_times
+            self.importance_order[node] = []
+            return
+        
+        sorted_times = sorted(all_times)
+        self.all_times_by_node[node] = set(sorted_times)
+        first_time, last_time = sorted_times[0], sorted_times[-1]
+        num_curves = len(curve_data)
+        
+        # Pre-cache all curve values at all times for fast lookup
+        # value_cache[curve_idx][time] = normalized_value (value / range)
+        curve_list = list(curve_data.keys())
+        value_cache = []
+        for curve in curve_list:
+            data = curve_data[curve]
+            range_val = curve_ranges[curve]
+            cache = {}
+            for t in sorted_times:
+                if t in data:
+                    cache[t] = data[t] / range_val
+                else:
+                    # Evaluate curve at this time
+                    vals = mc.keyframe(curve, query=True, time=(t,), eval=True, valueChange=True)
+                    cache[t] = (vals[0] if vals else 0) / range_val
+            value_cache.append(cache)
+        
+        # Run full RDP to get importance order (most important added first)
+        # Use sorted list + bisect for O(log n) segment lookup
+        sorted_keep = [first_time, last_time]  # Maintained sorted
+        candidate_times = set(sorted_times[1:-1])
+        addition_order = []
+        
+        while candidate_times:
+            best_frame = None
+            best_deviation = -1
+            
+            for t in candidate_times:
+                # O(log n) segment lookup using bisect
+                idx = bisect.bisect_left(sorted_keep, t)
+                if idx == 0:
+                    seg_start = sorted_keep[0]
+                    seg_end = sorted_keep[0]
+                elif idx >= len(sorted_keep):
+                    seg_start = sorted_keep[-1]
+                    seg_end = sorted_keep[-1]
+                else:
+                    seg_start = sorted_keep[idx - 1]
+                    seg_end = sorted_keep[idx]
+                
+                if seg_start == seg_end:
+                    continue
+                
+                # Calculate deviation using pre-cached normalized values
+                seg_len = seg_end - seg_start
+                ratio = (t - seg_start) / seg_len
+                total_deviation = 0
+                
+                for cache in value_cache:
+                    actual = cache[t]
+                    linear_val = cache[seg_start] + ratio * (cache[seg_end] - cache[seg_start])
+                    total_deviation += abs(actual - linear_val)
+                
+                if total_deviation > best_deviation:
+                    best_deviation = total_deviation
+                    best_frame = t
+            
+            if best_frame is not None:
+                addition_order.append(best_frame)
+                # O(log n) insertion to maintain sorted order
+                bisect.insort(sorted_keep, best_frame)
+                candidate_times.remove(best_frame)
+            else:
+                break
+        
+        # Reverse so least important is first (these get removed first at low compression)
+        self.importance_order[node] = list(reversed(addition_order))
+    
+    def apply_compression(self, compression):
+        """
+        Apply the given compression level. Uses cached importance order for speed.
+        """
+        if not self.initialized:
+            return
+        
+        self.current_compression = compression
+        
+        for node, curves in self.curves_by_node.items():
+            all_times = self.all_times_by_node.get(node, set())
+            if len(all_times) <= 2:
+                continue
+            
+            sorted_times = sorted(all_times)
+            importance_list = self.importance_order.get(node, [])
+            
+            # Calculate how many keys to keep
+            target_count = max(2, int(len(sorted_times) * (1 - compression / 100.0)))
+            
+            # Always keep first and last, then keep most important frames
+            # importance_list is ordered least->most important
+            # So we remove from the front (least important) based on compression
+            num_to_remove = len(sorted_times) - target_count
+            times_to_remove = set(importance_list[:num_to_remove]) if num_to_remove > 0 else set()
+            keep_times = all_times - times_to_remove
+            
+            # Apply to each curve
+            for curve in curves:
+                original = self.original_data.get(curve, {})
+                current_times = set(mc.keyframe(curve, query=True, timeChange=True) or [])
+                
+                # Remove keys that shouldn't be there
+                for t in current_times:
+                    if t not in keep_times:
+                        mc.cutKey(curve, time=(t, t))
+                
+                # Add back keys that should be there
+                for t in keep_times:
+                    if t not in current_times:
+                        if t in original:
+                            mc.setKeyframe(curve, time=t, value=original[t])
+                        else:
+                            mc.setKeyframe(curve, time=t, insert=True)
+    
+    def reset(self):
+        """Reset to original keyframes (compression = 0)."""
+        if not self.initialized:
+            return
+        
+        # Restore all original keyframes
+        for curve, data in self.original_data.items():
+            current_times = set(mc.keyframe(curve, query=True, timeChange=True) or [])
+            original_times = set(data.keys())
+            
+            # Remove keys not in original
+            for t in current_times - original_times:
+                mc.cutKey(curve, time=(t, t))
+            
+            # Add back original keys
+            for t, v in data.items():
+                if t not in current_times:
+                    mc.setKeyframe(curve, time=t, value=v)
+        
+        self.current_compression = 0
+        # Reset slider
+        if mc.intSliderGrp('ml_animCurveEditor_reduceCompression_slider', exists=True):
+            mc.intSliderGrp('ml_animCurveEditor_reduceCompression_slider', edit=True, value=0)
+    
+    def _on_selection_changed(self):
+        """Called when selection changes - finalize and reset state."""
+        self.reset_state()
+        # Reset slider to 0
+        if mc.intSliderGrp('ml_animCurveEditor_reduceCompression_slider', exists=True):
+            mc.intSliderGrp('ml_animCurveEditor_reduceCompression_slider', edit=True, value=0)
+
+
+# Global instance
+_keyframeReducer = KeyframeReducer()
+
+
+def _onReduceSliderDrag(value):
+    """Called while slider is being dragged."""
+    selectionOption = mc.optionMenuGrp('ml_animCurveEditor_selection_menu', query=True, select=True)
+    
+    # Initialize on first drag if needed
+    if not _keyframeReducer.initialized:
+        if not _keyframeReducer.initialize(selectionOption):
+            return
+    
+    _keyframeReducer.apply_compression(value)
+
+
+def _onReduceSliderChange(value):
+    """Called when slider value changes (after drag release or field edit)."""
+    # Same as drag - apply the compression
+    _onReduceSliderDrag(value)
+
+
+def _get_curve_value(curve, time, data_dict):
+    """Get curve value at time, from cache or by evaluating."""
+    if time in data_dict:
+        return data_dict[time]
+    vals = mc.keyframe(curve, query=True, time=(time,), eval=True, valueChange=True)
+    return vals[0] if vals else 0
 
 
 if __name__ == '__main__': ui()
 
-
-#      ______________________
-# - -/__ Revision History __/- - - - - - - - - - - - - - - - - - - - - - - -
-#
-# Revision 1: 2016-02-29 : First publish.
-#
-# Revision 2: 2016-05-01 : Fixing command name typo.
-#
-# Revision 3: 2017-12-03 : Adding "Insert Frame"
-#
-# Revision 4: 2018-02-17 : Updating license to MIT.
-#
-# Revision 5: 2018-04-25 : UI bug fix, adding cutKey.
-#
-# Revision 6: 2018-05-14 : Shelf support.

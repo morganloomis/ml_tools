@@ -47,11 +47,22 @@ def get_worldMatrix(node):
     return [x for x in matrix]
 
 def get_worldPosition(node):
-    return get_worldMatrix(node)[12:15]
+    return matrix_to_position(get_worldMatrix(node))
 
 def position_to_matrix(position):
     return [1,0,0,0, 0,1,0,0, 0,0,1,0, position[0], position[1], position[2], 1]
 
+def matrix_to_position(matrix):
+    '''
+    Can take a maya matrix, and array, or a plug.
+    '''
+    if isinstance(matrix, (list,tuple)) and len(matrix) == 16:
+        return matrix[12:15]
+    elif mc.objExists(matrix):
+        matrix = mc.getAttr(matrix)
+        return matrix_to_position(matrix)
+    else:
+        raise IOError(f'Input value is not a valid matrix or plug: {matrix}')
 
 def set_worldMatrix(node, matrix, offsetMatrix=None, iterateTolerance=0.0001, iterationMax=4, position=True, orientation=True):
     '''

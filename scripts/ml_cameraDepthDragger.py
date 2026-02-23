@@ -172,14 +172,3 @@ class CameraDepthDragger(utl.Dragger):
 
 if __name__ == '__main__': drag()
 
-
-#      ______________________
-# - -/__ Revision History __/- - - - - - - - - - - - - - - - - - - - - - - -
-#
-# Revision 1: 2012-03-12 : First publish.
-#
-# Revision 2: 2014-03-01 : adding category
-#
-# Revision 3: 2016-12-10 : Removing euclid dependency
-#
-# Revision 4: 2018-02-17 : Updating license to MIT.

@@ -408,8 +408,3 @@ class SpacingContext(object):
 if __name__ == '__main__':
     ui()
 
-#      ______________________
-# - -/__ Revision History __/- - - - - - - - - - - - - - - - - - - - - - - -
-#
-# Revision 1: 2016-06-21 : First publish.
-#

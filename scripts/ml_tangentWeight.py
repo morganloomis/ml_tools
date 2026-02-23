@@ -201,15 +201,3 @@ def tangentScale(value, outValue=None):
 
 if __name__ == '__main__':ui()
 
-#      ______________________
-# - -/__ Revision History __/- - - - - - - - - - - - - - - - - - - - - - - -
-#
-# Revision 1: 2016-03-25 : First publish.
-#
-# Revision 2: 2016-03-27 : Fixed command name typo
-#
-# Revision 3: 2016-05-01 : fixed error when nothing is selected.
-#
-# Revision 4: 2018-02-17 : Updating license to MIT.
-#
-# Revision 5: 2018-05-14 : Shelf support.

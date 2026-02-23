@@ -161,15 +161,3 @@ def frameGraphEditor(centerCurrentTime=False):
 if __name__ == '__main__':
     main()
 
-#      ______________________
-# - -/__ Revision History __/- - - - - - - - - - - - - - - - - - - - - - - -
-#
-# Revision 1: 2016-05-07 : First publish.
-#
-# Revision 2: 2016-05-08 : Frame values correctly for given frame range, option to center on current time.
-#
-# Revision 3: 2016-05-09 : Updated to support graph editor visibility, now requires ml_utilities.
-#
-# Revision 4: 2016-05-10 : Wrapping fitPanel, updating header info.
-#
-# Revision 5: 2018-02-17 : Updating license to MIT.

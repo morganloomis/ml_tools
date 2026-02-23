@@ -359,14 +359,3 @@ def importControl(name):
 
     return assPost[0]
 
-
-#      ______________________
-# - -/__ Revision History __/- - - - - - - - - - - - - - - - - - - - - - - -
-#
-# Revision 1: 2016-07-31 : First publish.
-#
-# Revision 2: 2016-08-02 : fixing function order for correct header generation.
-#
-# Revision 3: 2016-08-11 : documentation and dependency update
-#
-# Revision 4: 2018-02-17 : Updating license to MIT.

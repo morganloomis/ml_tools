@@ -216,16 +216,3 @@ def goToKeyframe(option='next', roundFrame=False, selected=False, selectKeys=Fal
 if __name__ == '__main__':
     ui()
 
-
-#      ______________________
-# - -/__ Revision History __/- - - - - - - - - - - - - - - - - - - - - - - -
-#
-# Revision 1: 2012-07-23 : First publish.
-#
-# Revision 2: 2013-10-29 : Added hierarchy search, select keyframes, and a couple more options.
-#
-# Revision 3: 2014-03-01 : adding category.
-#
-# Revision 4: 2018-02-17 : Updating license to MIT.
-#
-# Revision 5: 2018-05-13 : shelf support

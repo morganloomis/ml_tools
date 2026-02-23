@@ -94,11 +94,3 @@ def main():
 if __name__ == '__main__':
     main()
 
-#      ______________________
-# - -/__ Revision History __/- - - - - - - - - - - - - - - - - - - - - - - -
-#
-# Revision 1: 2015-05-14 : Converted from mel.
-#
-# Revision 3: 2018-02-17 : Updating license to MIT.
-#
-# Revision 4: 2018-05-12 : Shelf support

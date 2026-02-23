@@ -13,28 +13,6 @@ TARGET_ATTR = 'pup_matchTarget'
 TAG_ATTR = 'pup_matchTag'
 OFFSET_ATTR = 'pup_matchOffset'
 
-from importlib import reload
-reload(ml_snap)
-
-SKELETON_LOOKUP = {'Hip':['Hips'],
-                    'Chest':['Spine1'],
-                    'Neck':['Neck'],
-                    'Head':['Head'],
-                    'LeftShoulder':['LeftArm'],
-                    'RightShoulder':['RightArm'],
-                    'LeftElbow':['LeftForeArm'],
-                    'RightElbow':['RightForeArm'],
-                    'LeftHand':['LeftHand'],
-                    'RightHand':['RightHand'],
-                    'LeftHip':['LeftUpLeg'],
-                    'RightHip':['RightUpLeg'],
-                    'LeftKnee':['LeftLeg'],
-                    'RightKnee':['RightLeg'],
-                    'LeftFoot':['LeftFoot'],
-                    'RightFoot':['RightFoot']
-                    }
-
-
 SIDE_LOOKUP = ['Center','Left','Right']
 LABEL_LOOKUP = ['None',
                 'Root',
@@ -85,6 +63,9 @@ def get_matrix_data(matrices, start=None, end=None):
         mSel.add(matrix)
         plugs[matrix] = mSel.getPlug(0)
 
+    t0 = time.perf_counter()
+    num_frames = int(end) - int(start) + 1
+    num_matrices = len(plugs)
     for f in range(int(start), int(end+1)):
         timeContext = om.MDGContext(om.MTime(f, uiUnit))
         for matrix, plug in plugs.items():
@@ -92,6 +73,9 @@ def get_matrix_data(matrices, start=None, end=None):
             matrixData = om.MFnMatrixData(matrixMObj)
             matrixValue = matrixData.matrix()
             data[matrix][f] = matrixValue
+    elapsed = time.perf_counter() - t0
+    print('get_matrix_data: {} frames x {} matrices = {:.3f}s ({:.1f} ms/frame)'.format(
+        num_frames, num_matrices, elapsed, 1000.0 * elapsed / num_frames if num_frames else 0))
 
     return data
 
@@ -245,254 +229,6 @@ class MatchSystem(object):
         '''Match a frame range by determining keys.
         Get matrices and determine local key values for each level of order.'''
         pass
-
-#######################################################
-## RETARGETTING
-#######################################################
-
-def get_orientation_offset(joint, relativeMatrix=[1,0,0,0, 0,1,0,0, 0,0,1,0, 0,0,0,1]):
-    relativeMatrix = relativeMatrix[:12]+[0,0,0,1]
-    inverseMatrix = om.MMatrix(relativeMatrix).inverse()
-
-    jointMatrix = ml_snap.get_worldMatrix(joint)
-    jointMatrix = om.MMatrix(jointMatrix[:12]+[0,0,0,1])
-
-    matrix = jointMatrix * inverseMatrix
-
-    r = om.MTransformationMatrix(matrix).rotation(asQuaternion=False)
-    offset = [math.degrees(x) for x in r]
-
-
-def tag_joint(joint, side, label, offset=[0,0,0]):
-    if not mc.nodeType(joint) == 'joint':
-        raise RuntimeError(f'{joint} is not a joint.')
-    mc.setAttr(joint+'.side', SIDE_LOOKUP.index(side))
-    mc.setAttr(joint+'.type', LABEL_LOOKUP.index(label))
-
-    try:
-        mc.addAttr(joint, ln='offset', at='double3', keyable=True)
-        for x in 'XYZ':
-            mc.addAttr(joint, ln='offset'+x, at='doubleAngle', parent='offset', keyable=True)
-    except:
-        pass
-
-    mc.setAttr(joint+'.offset', *offset)
-
-
-def tag_skeleton(root):
-    '''
-    Evaluate a skeleton to apply side and type to all joints, in preparation for matching.
-    The idea is that the data about the skeleton should be encoded in the scene, rather than
-    on the fly. That allows for manual fixing of issues and support for odd skeletons.
-    '''
-
-    def child_joints(joint):
-        return mc.ls(mc.listRelatives(joint, f=True), type='joint')
-
-    def position(node):
-        return ml_snap.get_worldPosition(node)
-    
-    def child_chains_by_length(node):
-        kids = child_joints(node)
-        lengths = []
-        for kid in kids:
-            lengths.append(len(mc.listRelatives(kid, ad=True, type='joint')))
-        return [x for _,x in sorted(zip(lengths,kids))]
-    
-    def shortest_child_chain(node):
-        return child_chains_by_length(node)[0]
-    
-    def longest_child_chain(node):
-        return child_chains_by_length(node)[-1]
-
-    def first_branching_joint(root, limit=2):
-        joint = root
-        kids = child_joints(joint)
-        while kids:
-            if len(kids) >= limit:
-                return joint
-            joint = kids[0]
-            kids = child_joints(joint)
-        return None
-
-    def leaf_joint(root, keyed=False):
-        kids = [root]
-        prev = root
-        joint = root
-
-        while True:
-            prev = joint
-            joint = kids[0]
-            kids = child_joints(joint)
-            if not kids:
-                if keyed and not mc.keyframe(joint, time=(':',), query=True, keyframeCount=True):
-                    return prev
-                else:
-                    return joint
-            
-    def bone_length(end):
-        parent = mc.listRelatives(end, parent=True, f=True)
-        p1 = utl.Vector(*position(end))
-        if not parent:
-            return p1.magnitude()
-        p2 =  utl.Vector(*position(parent[0]))
-        vec = p1 - p2
-        return vec.magnitude()
-    
-    def chain_length(root, end):
-        totalLength = bone_length(end)
-        parent = mc.listRelatives(end, parent=True, f=True)
-        while parent and not utl.sameNode(root, parent[0]):
-            totalLength += bone_length(parent[0])
-            parent = mc.listRelatives(parent[0], parent=True, f=True)
-        return totalLength
-    
-    def outlier_child(root):
-        #get the mean of all child positions. The one that's farthest away from mean in thumb.
-        points = {}
-        kids = mc.listRelatives(root, type='joint', pa=True)
-        count = len(kids)
-        for kid in kids:
-            points[kid] = utl.Vector(*mc.getAttr(kid+'.translate')[0])
-        
-        mean = utl.Vector(0,0,0)
-        for point in points.values():
-            mean+=point
-        mean = mean/count
-
-        outlier = kids[0]
-        maxDist = 0
-        for kid, point in points.items():
-            dist = (mean-point).magnitude()
-            if dist > maxDist:
-                outlier = kid
-                maxDist = dist
-
-        return outlier
-    
-    def order_by_distance(list, target):
-        result = []
-        pass
-            
-
-
-    hip = first_branching_joint(root)
-
-    #go to start frame, best chance of being a t pose.
-
-    keyTimes = mc.keyframe(hip, query=True, timeChange=True)
-    if not keyTimes:
-        raise RuntimeError('No animation on skeleton?')
-    keyTimes = sorted(list(set(keyTimes)))
-    mc.currentTime(int(keyTimes[0]))
-    mc.refresh()
-
-    #assume we're at bind pose.
-    #get the offset between this and our default spine control (world oriented)
-    #assume this same offset is continued through the spine, neck and head
-    matrix = ml_snap.get_worldMatrix(hip)
-    r = om.MTransformationMatrix(om.MMatrix(matrix[:12]+[0,0,0,1])).rotation(asQuaternion=False)
-    offset = [math.degrees(x) for x in r]
-
-    tag_joint(hip, 'Center', 'Hip', offset=offset)
-    
-
-    hipChains = child_chains_by_length(hip)
-    chest = first_branching_joint(hipChains[-1])
-    tag_joint(chest, 'Center', 'Spine', offset=offset)
-
-    chestChains = child_chains_by_length(chest)
-
-    neck = chestChains[0]
-    tag_joint(neck, 'Center', 'Neck', offset=offset)
-
-    head = None
-    if neck:
-        head = leaf_joint(neck, keyed=True)
-    else:
-        head = shortest_child_chain(chest)
-    tag_joint(head, 'Center', 'Head', offset=offset)
-
-    LfClav = None
-    RtClav = None
-
-    #left clav will be one of these, based which side of the chest its on?
-    chest_pos = ml_snap.get_worldPosition(chest)
-    for clav in chestChains[-2:]:
-        kid = child_joints(clav)[0]
-        position = ml_snap.get_worldPosition(kid)
-        vect = [a-b for a,b in zip(position,chest_pos)]
-        vect = utl.Vector(*position) - utl.Vector(*chest_pos)
-        vect.normalize()
-        if vect.dot(utl.Vector(1,0,0)) > 0:
-            LfClav = clav
-            break
-    
-    if LfClav == chestChains[-1]:
-        RtClav = chestChains[-2]
-    else:
-        RtClav = chestChains[-1]
-
-    tag_joint(LfClav, 'Left', 'Collar')
-    tag_joint(RtClav, 'Right', 'Collar')
-
-    for clav, side in zip([LfClav, RtClav],['Left','Right']):
-        shoulder = child_joints(clav)[0]
-        tag_joint(shoulder, side, 'Shoulder')
-
-        hand = first_branching_joint(shoulder)
-        tag_joint(hand, side, 'Hand')
-
-        elbow = child_joints(shoulder)[0]
-        tag_joint(elbow, side, 'Elbow')
-
-        if not hand:
-            hand = leaf_joint(shoulder, keyed=True)
-        else:
-            #do fingers
-            thumb = outlier_child(hand)
-            tag_joint(thumb, side, 'Thumb')
-
-            
-
-    LfHip = None
-    RtHip = None
-
-    #left clav will be one of these, based which side of the chest its on?
-    hip_pos = ml_snap.get_worldPosition(hip)
-    for each in hipChains[:2]:
-        position = ml_snap.get_worldPosition(each)
-        vect = [a-b for a,b in zip(position,hip_pos)]
-        vect = utl.Vector(*position) - utl.Vector(*hip_pos)
-        vect.normalize()
-        if vect.dot(utl.Vector(1,0,0)) > 0:
-            LfHip = each
-            break
-    
-    if LfHip == hipChains[0]:
-        RtHip = hipChains[1]
-    else:
-        RtHip = hipChains[0]
-
-    tag_joint(LfHip, 'Left', 'Hip')
-    tag_joint(RtHip, 'Right', 'Hip')
-
-    for each, side in zip([LfHip, RtHip],['Left','Right']):
-        knee = child_joints(each)[0]
-        tag_joint(knee, side, 'Knee')
-
-        foot = child_joints(knee)[0]
-        tag_joint(foot, side, 'Foot')
-
-        toe = child_joints(foot)[0]
-        tag_joint(toe, side, 'Toe')
-
-
-    #fingers
-
-
-    mc.select(hip)
-    mm.eval('displayJointLabels 1;')
 
 
 class MatchSkeleton(object):

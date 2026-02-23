@@ -426,13 +426,3 @@ def reset_pivot(*args):
 if __name__ == '__main__':
     ui()
 
-#      ______________________
-# - -/__ Revision History __/- - - - - - - - - - - - - - - - - - - - - - - -
-#
-# Revision 1: 2016-06-21 : First publish.
-#
-# Revision 2: 2017-06-26 : update for pySide2, maya 2017
-#
-# Revision 3: 2017-07-17 : initial support for attribute driven pivots
-#
-# Revision 4: 2018-02-17 : Updating license to MIT.

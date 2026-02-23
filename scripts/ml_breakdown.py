@@ -345,13 +345,3 @@ class BreakdownDragger(utl.Dragger):
 if __name__ == '__main__':
     quickBreakDownUI()
 
-#      ______________________
-# - -/__ Revision History __/- - - - - - - - - - - - - - - - - - - - - - - -
-#
-# Revision 1: 2015-05-13 : First publish.
-#
-# Revision 2: 2015-05-13 : Documentation updates.
-#
-# Revision 3: 2018-02-17 : Updating license to MIT.
-#
-# Revision 4: 2018-05-13 : shelf support
