@@ -73,6 +73,12 @@ except ImportError:
 
 import ml_snap, ml_match
 
+ml_skinConstraint = None
+try:
+    import ml_skinConstraint
+except ImportError:
+    pass
+
 SNAP_BAKE_ATTR = 'ml_snapBake'
 FOLLOW_ATTR = 'followSnap'
 DESTINATION_ATTR = 'ml_snapDestination'
@@ -82,7 +88,7 @@ def ui():
     '''
     User interface for snap bake.
     '''
-    with utl.MlUi('ml_snapBake', 'Snap Bake', width=400, height=120, info='''Create a locator that follows the first selection (transform or vertex).
+    with utl.MlUi('ml_snapBake', 'Snap Bake', width=400, height=200, info='''Create a locator that follows the first selection (transform or vertex).
 Key the locator's Follow attribute on frames to bake. Bake Snap Locators
 snaps the destination to the locator on those frames.''') as win:
 
@@ -98,6 +104,18 @@ snaps the destination to the locator on those frames.''') as win:
                 'maintainOffset': 'ml_snapBake_maintainOffset_checkBox',
             },
             annotation='Create a locator that follows the first selection, targeting the second.')
+
+        win.ButtonWithPopup(
+            label='Create World Pin',
+            command=create_world_pin_sel,
+            name='ml_snapBake',
+            annotation='Create a snap locator at the control\'s current world pose. It stays fixed until you move it or bake; no live follow graph.')
+
+        win.ButtonWithPopup(
+            label='Select Snap Locators',
+            command=select_snap_locators_for_selection,
+            name='ml_snapBake',
+            annotation='Scene-wide: select every snap locator whose destination message points at one of the selected transforms.')
 
         win.ButtonWithPopup(
             label='Bake Snap Locators',
@@ -139,19 +157,146 @@ def _is_vertex_component(node):
     return part.startswith('vtx[') and part.endswith(']')
 
 
-def _get_vertex_source_matrix_node(src_vertex):
+def _is_geometry_component_path(node):
+    '''True if path looks like a mesh/CV/point component (not a transform plug).'''
+    if not isinstance(node, str) or '.' not in node:
+        return False
+    tail = node.split('.')[-1]
+    if tail.startswith('vtx[') and tail.endswith(']'):
+        return True
+    if tail.startswith('cv[') and tail.endswith(']'):
+        return True
+    if tail.startswith('pt[') and tail.endswith(']'):
+        return True
+    return False
+
+
+def _transform_long_from_dag_path(path):
     '''
-    Create a hidden driver transform constrained to the vertex;
-    return the driver transform name so we can use its worldMatrix.
-    Uses pointOnPolyConstraint so the driver follows the vertex.
+    Given a DAG path (transform, shape, or component), return parent transform long name or None.
     '''
-    mesh = src_vertex.split('.')[0]
-    if not mc.objExists(mesh):
-        raise RuntimeError('Mesh does not exist: {}'.format(mesh))
-    driver = mc.spaceLocator(name='snapBake_driver_#')[0]
-    mc.setAttr(driver + '.visibility', 0)
-    mc.pointOnPolyConstraint(src_vertex, driver)
-    return driver
+    if not path or not isinstance(path, str):
+        return None
+    head = path.split('.')[0]
+    if not mc.objExists(head):
+        return None
+    if mc.objectType(head, isType='transform'):
+        return mc.ls(head, long=True)[0]
+    parents = mc.listRelatives(head, parent=True, type='transform', fullPath=True)
+    if parents:
+        return parents[0]
+    return None
+
+
+def _add_snap_locator_metadata(locator, dst):
+    '''Locked ml_snapBake, keyable followSnap, message ml_snapDestination from dst.'''
+    mc.addAttr(locator, longName=SNAP_BAKE_ATTR, attributeType='bool', defaultValue=True)
+    mc.setAttr(locator + '.' + SNAP_BAKE_ATTR, lock=True)
+    mc.addAttr(locator, longName=FOLLOW_ATTR, attributeType='bool', defaultValue=True, keyable=True)
+    mc.addAttr(locator, longName=DESTINATION_ATTR, attributeType='message')
+    mc.connectAttr(dst + '.message', locator + '.' + DESTINATION_ATTR)
+
+
+def collect_driven_transforms_long_from_selection():
+    '''
+    Unique transform long names for current selection (strip components to driving transforms).
+    Returns empty list if none.
+    '''
+    sel = mc.ls(sl=True, long=True, flatten=True)
+    if not sel:
+        return []
+    seen = []
+    done = set()
+    for s in sel:
+        tf = _transform_long_from_dag_path(s)
+        if tf and tf not in done:
+            done.add(tf)
+            seen.append(tf)
+    return seen
+
+
+def create_world_pin(dst):
+    '''
+    Snap locator at dst's current world pose: no multMatrix, offsetParentMatrix drivers, or constraints.
+    '''
+    if not mc.objExists(dst):
+        utl.warning('Destination does not exist.')
+        return None
+    dst = mc.ls(dst, long=True)[0]
+    if not mc.objectType(dst, isType='transform'):
+        utl.warning('Destination must be a transform.')
+        return None
+
+    name = mc.ls(dst, shortNames=True)[0]
+    if ':' in name:
+        name = name.rpartition(':')[-1]
+    locator = mc.spaceLocator(name='snapBake_{}_#'.format(name))[0]
+    locator = mc.ls(locator, long=True)[0]
+    mc.setAttr(locator + '.rotateOrder', 3)
+
+    _add_snap_locator_metadata(locator, dst)
+
+    mc.currentTime(mc.currentTime(query=True))
+    dst_world = mc.getAttr(dst + '.worldMatrix[0]')
+    ml_snap.set_worldMatrix(locator, list(dst_world))
+
+    mc.select(locator, replace=True)
+    return locator
+
+
+def create_world_pin_sel():
+    '''
+    Exactly one transform (or mixed selection whose resolved transforms collapse to one),
+    but not a pure-component-only selection.
+    '''
+    sel = mc.ls(sl=True, long=True, flatten=True)
+    if not sel:
+        utl.warning('Select exactly one transform for Create World Pin.')
+        return
+    if all(_is_geometry_component_path(s) for s in sel):
+        utl.warning('Select a transform, not a component.')
+        return
+
+    tfs = collect_driven_transforms_long_from_selection()
+    if not tfs:
+        utl.warning('Select exactly one transform for Create World Pin.')
+        return
+    if len(tfs) > 1:
+        utl.warning('Select exactly one transform for Create World Pin.')
+        return
+
+    create_world_pin(tfs[0])
+
+
+def select_snap_locators_for_selection():
+    '''
+    Select all scene snap locators whose ml_snapDestination points at any selected transform.
+    '''
+    controls = collect_driven_transforms_long_from_selection()
+    if not controls:
+        utl.warning('Select one or more transforms (driven controls) to search for snap locators.')
+        return
+    control_set = set(controls)
+
+    matches = []
+    for loc in _get_snap_locators(None):
+        dest_plugs = mc.listConnections(
+            loc + '.' + DESTINATION_ATTR, source=True, destination=False, plugs=True)
+        if not dest_plugs:
+            continue
+        dst_node = dest_plugs[0].split('.')[0]
+        if not mc.objExists(dst_node):
+            continue
+        dst_long = mc.ls(dst_node, long=True)
+        if not dst_long:
+            continue
+        if dst_long[0] in control_set:
+            matches.append(loc)
+
+    if not matches:
+        utl.warning('No snap locators in the scene target the selected controls.')
+        return
+    mc.select(matches, replace=True)
 
 
 def create_snap_locator(src, dst, maintainOffset=True):
@@ -173,19 +318,17 @@ def create_snap_locator(src, dst, maintainOffset=True):
     locator = mc.spaceLocator(name='snapBake_{}_#'.format(name))[0]
     mc.setAttr(locator + '.rotateOrder', 3)
 
-    # Identifying attribute
-    mc.addAttr(locator, longName=SNAP_BAKE_ATTR, attributeType='bool', defaultValue=True)
-    mc.setAttr(locator + '.' + SNAP_BAKE_ATTR, lock=True)
-
-    # Keyable follow attribute (which frames to bake)
-    mc.addAttr(locator, longName=FOLLOW_ATTR, attributeType='bool', defaultValue=True, keyable=True)
-
-    # Message to destination for tracking
-    mc.addAttr(locator, longName=DESTINATION_ATTR, attributeType='message')
-    mc.connectAttr(dst + '.message', locator + '.' + DESTINATION_ATTR)
+    _add_snap_locator_metadata(locator, dst)
 
     if src_is_vertex:
-        driver = _get_vertex_source_matrix_node(src)
+        if ml_skinConstraint is None:
+            utl.warning('Cannot follow a vertex without ml_skinConstraint.')
+            mc.delete(locator)
+            return
+        driver = mc.spaceLocator(name='snapBake_driver_#')[0]
+        mc.setAttr(driver + '.visibility', 0)
+        ml_skinConstraint.skinned_vertex_constraint(src, driver)
+        
         src_matrix_plug = driver + '.worldMatrix[0]'
     else:
         driver = None
@@ -263,7 +406,6 @@ def bake_snap_locators(locators=None):
     start, end = utl.frameRange()
     reset_time = mc.currentTime(query=True)
 
-
     #locator connections
     driven = {}
     for loc in locs:
@@ -279,6 +421,12 @@ def bake_snap_locators(locators=None):
         followFrames[loc] = _get_follow_on_frames(loc)
     allFrames = [num for numbers in followFrames.values() for num in numbers]
     allFrames = sorted(list(set(allFrames)))
+    if not allFrames:
+        utl.warning(
+            'No frames to bake: every snap locator has Follow off for the timeline range, '
+            'or the playback range is empty. Enable Follow (or key it on) where you want a bake.'
+        )
+        return
 
     #need to go through and get all the matrix data first
     #this is a dict of all locators and their matrix data for every frame

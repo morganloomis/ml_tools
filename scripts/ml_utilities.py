@@ -2424,7 +2424,17 @@ class Matrix:
 
     def __len__(self):
         return 16
-    
+
+    @property
+    def array(self):
+        '''Maya row-major 16-float list (same layout as ml_snap matrix lists).'''
+        return self._array
+
+    def _coerce_vector(self, vec):
+        if isinstance(vec, Vector):
+            return vec
+        return Vector(vec)
+
     def __mul__(self, other):
 
         if not isinstance(other, Matrix):
@@ -2453,6 +2463,11 @@ class Matrix:
     @property
     def z(self):
         return Vector(self._array[8],self._array[9],self._array[10])
+
+    @property
+    def position(self):
+        '''World translation as Vector (indices 12–14).'''
+        return Vector(self._array[12], self._array[13], self._array[14])
     
     def translate(self):
         return self.MTransformMatrix.translation(om.MSpace.kWorld)
@@ -2465,5 +2480,51 @@ class Matrix:
         return self.MTransformMatrix.tscale(om.MSpace.kWorld)
 
     def mult_point(self, point):
-        pass
+        '''Transform a 3D point (Vector, list, or tuple) by this matrix including translation.'''
+        v = self._coerce_vector(point)
+        m = self._array
+        return Vector(
+            m[0] * v.x + m[4] * v.y + m[8] * v.z + m[12],
+            m[1] * v.x + m[5] * v.y + m[9] * v.z + m[13],
+            m[2] * v.x + m[6] * v.y + m[10] * v.z + m[14],
+        )
+
+    def mult_direction(self, direction):
+        '''Transform a 3D direction (no translation).'''
+        v = self._coerce_vector(direction)
+        m = self._array
+        return Vector(
+            m[0] * v.x + m[4] * v.y + m[8] * v.z,
+            m[1] * v.x + m[5] * v.y + m[9] * v.z,
+            m[2] * v.x + m[6] * v.y + m[10] * v.z,
+        )
+
+    @classmethod
+    def compose_sim_axes(cls, position, aim_y, up_x):
+        '''
+        Sim frame: +Y aim, +X up, +Z = Y x X (right-handed). position may be Vector or 3-tuple.
+        '''
+        pos = Vector(position) if not isinstance(position, Vector) else position
+        y = Vector(aim_y).normalized()
+        if y.magnitude() < 1e-10:
+            y = Vector(0, 1, 0)
+        x = Vector(up_x).normalized()
+        if x.magnitude() < 1e-10:
+            x = y.cross(Vector(0, 1, 0)).normalized()
+        if x.magnitude() > 1e-10:
+            x = (x - y * x.dot(y)).normalized()
+        if x.magnitude() < 1e-10:
+            fallback = Vector(1, 0, 0) if abs(y.x) < 0.9 else Vector(0, 0, 1)
+            x = y.cross(fallback).normalized()
+        if x.magnitude() < 1e-10:
+            x = Vector(1, 0, 0)
+        z = y.cross(x).normalized()
+        if z.magnitude() < 1e-10:
+            z = Vector(0, 0, 1)
+        return cls([
+            x.x, x.y, x.z, 0,
+            y.x, y.y, y.z, 0,
+            z.x, z.y, z.z, 0,
+            pos.x, pos.y, pos.z, 1,
+        ])
 

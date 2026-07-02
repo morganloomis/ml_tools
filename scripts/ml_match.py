@@ -46,7 +46,7 @@ LABEL_LOOKUP = ['None',
                 'Foot Thumb']
 
 
-def get_matrix_data(matrices, start=None, end=None):
+def get_matrix_data(matrices, start=None, end=None, verbose=False):
     '''
     Should hopefully get matrix values for every frame quickly.
     '''
@@ -74,8 +74,9 @@ def get_matrix_data(matrices, start=None, end=None):
             matrixValue = matrixData.matrix()
             data[matrix][f] = matrixValue
     elapsed = time.perf_counter() - t0
-    print('get_matrix_data: {} frames x {} matrices = {:.3f}s ({:.1f} ms/frame)'.format(
-        num_frames, num_matrices, elapsed, 1000.0 * elapsed / num_frames if num_frames else 0))
+    if verbose:
+        print('get_matrix_data: {} frames x {} matrices = {:.3f}s ({:.1f} ms/frame)'.format(
+            num_frames, num_matrices, elapsed, 1000.0 * elapsed / num_frames if num_frames else 0))
 
     return data
 

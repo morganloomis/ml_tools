@@ -56,3 +56,12 @@ docs/_build/
 
 # PyBuilder
 target/
+
+package.py
+scripts/.cursor
+scripts/openspec
+*.code-workspace
+
+.cursor/
+.cursorrules
+openspec

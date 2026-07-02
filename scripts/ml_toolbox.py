@@ -66,7 +66,9 @@
 # 
 # If you have large menus and you don't like all the printing (if it's slowing
 # startup), you can remove the verbose flag from Toolbox call in the main()
-# function to suppress it. For python scripts, there's a few extra things you can
+# function to suppress it. For menu matching diagnostics, set environment variable
+# ML_TOOLBOX_INVESTIGATE=1 (or pass verbose=True to toolbox()) or call
+# investigate_main_window_menus(menus_path). For python scripts, there's a few extra things you can
 # do to get the most out of this tool. If you want any additional functions to be
 # searched for besides main() etc, add them to the functionList variable below.
 # They are sorted in search order. You can add an optional insertAfter variable to
@@ -88,6 +90,7 @@ __revision__ = 6
 import maya.cmds as mc
 import maya.mel as mm
 import os, re, sys, imp, posixpath
+from collections import defaultdict
 from maya import OpenMaya
 
 MENU_ITEM_PREFIX = '*' #change this if you want a different prefix for custom menu
@@ -108,7 +111,7 @@ def main():
     toolbox(ml_toolbox_menu)
     
 
-def toolbox(module, verbose=False):
+def toolbox(module, verbose=True):
 
     if is_batch_mode():
         print('Skipping menu creation in batch mode.')
@@ -129,6 +132,100 @@ def customMenu(module, name=None, verbose=True):
     
 def is_batch_mode():
     return os.environ.get('MAYA_BATCH', '0') != '0'
+
+
+def format_label_key_current(label):
+    '''
+    Match key used when pairing Maya menu labels to top-level ml_toolbox_menu folders.
+    Exposed for investigation output; behavior matches createMainMenus / appendMayaMenu.
+    '''
+    if not label:
+        return ''
+    return label.replace(' ', '').lower()
+
+
+def resolve_menu_ui_for_duplicate_label(ui_names_ordered):
+    '''
+    Maya sometimes exposes more than one main-bar menu with the same -label (e.g. Deform
+    in different menu sets). Pick one UI name: prefer objects whose name contains "Rig"
+    (e.g. mainRigDeformationsMenu over mainDeformMenu).
+    ui_names_ordered: bar order, first wins when heuristics tie.
+    '''
+    if not ui_names_ordered:
+        return None
+    if len(ui_names_ordered) == 1:
+        return ui_names_ordered[0]
+    lower = [(n, n.lower()) for n in ui_names_ordered]
+    with_rig = [n for n, low in lower if 'rig' in low]
+    if len(with_rig) == 1:
+        return with_rig[0]
+    if len(with_rig) > 1:
+        with_deform = [n for n in with_rig if 'deform' in n.lower()]
+        if len(with_deform) == 1:
+            return with_deform[0]
+        if with_deform:
+            return sorted(with_deform)[0]
+        return sorted(with_rig)[0]
+    return ui_names_ordered[0]
+
+
+def build_main_menus_label_map(main_window_menus):
+    '''
+    Map normalized label key -> chosen Maya menu UI name for MayaWindow menus.
+    Collides duplicate labels via resolve_menu_ui_for_duplicate_label.
+    '''
+    buckets = defaultdict(list)
+    for name in main_window_menus:
+        label = mc.menu(name, query=True, label=True)
+        k = format_label_key_current(label)
+        buckets[k].append(name)
+    return {k: resolve_menu_ui_for_duplicate_label(names) for k, names in buckets.items()}
+
+
+def investigate_main_window_menus(menus_path=None):
+    '''
+    Print Maya main-window menus and optional folder↔key alignment (Script Editor helper).
+    menus_path: e.g. ml_toolbox_menu.__path__[0] — if omitted, only Maya menus are listed.
+    '''
+    if is_batch_mode():
+        print('ml_toolbox.investigate_main_window_menus: skipped in batch mode.')
+        return
+    main_window_menus = mc.window('MayaWindow', query=True, menuArray=True)
+    if not main_window_menus:
+        print('ml_toolbox.investigate_main_window_menus: no menus under MayaWindow.')
+        return
+    print('\n[ml_toolbox investigate] MayaWindow menus (ui name, label, match key):')
+    by_key = {}
+    for ui_name in main_window_menus:
+        lb = mc.menu(ui_name, query=True, label=True)
+        key = format_label_key_current(lb)
+        by_key.setdefault(key, []).append(ui_name)
+        print('  {!r}  label={!r}  key={!r}'.format(ui_name, lb, key))
+    main_menus = build_main_menus_label_map(main_window_menus)
+    for key, names in sorted(by_key.items()):
+        if len(names) > 1:
+            print('  [duplicate label key {!r}] candidates={} -> using {!r}'.format(
+                key, names, main_menus.get(key)))
+    if not menus_path:
+        print('[ml_toolbox investigate] Pass menus_path=ml_toolbox_menu.__path__[0] to check folder keys.\n')
+        return
+    print('\n[ml_toolbox investigate] Top-level folders under {!r}:'.format(menus_path))
+    for folder in sorted(os.listdir(menus_path)):
+        if folder.startswith('.') or folder.startswith('__'):
+            continue
+        tool_dir = posixpath.join(menus_path, folder)
+        if not os.path.isdir(tool_dir):
+            continue
+        menu_label = labelFromPath(tool_dir)
+        key = format_label_key_current(menu_label)
+        matched = key in main_menus and not main_menus[key].startswith(MAIN_MENU_NAME_PREFIX)
+        if matched:
+            print('  folder={!r} menuLabel={!r} key={!r} -> Maya menu {!r}'.format(
+                folder, menu_label, key, main_menus[key]))
+        else:
+            print('  folder={!r} menuLabel={!r} key={!r} -> NO match (would add custom top-level menu)'.format(
+                folder, menu_label, key))
+    print('')
 
 
 def labelFromPath(path):
@@ -179,13 +276,22 @@ class Toolbox(object):
         if not mainWindowMenus:
             return
         #get the label for each of the menus
-        #this will be matched against tool directories
-        self.mainMenus = {}
-        for name in mainWindowMenus:
-            label = mc.menu(name, query=True, label=True)
-            #we need to make the label all lower case and no spaces, so we can match properly.
-            formatLabel = label.replace(' ','').lower()
-            self.mainMenus[formatLabel] = name
+        #this will be matched against tool directories (duplicate labels resolved below)
+        self.mainMenus = build_main_menus_label_map(mainWindowMenus)
+
+        investigate = self.verbose or (os.environ.get('ML_TOOLBOX_INVESTIGATE', '').strip() not in ('', '0', 'false', 'False'))
+        if investigate:
+            print('\n[ml_toolbox investigate] MayaWindow menus (ui, label, match key):')
+            by_key = {}
+            for name in mainWindowMenus:
+                lb = mc.menu(name, query=True, label=True)
+                k = format_label_key_current(lb)
+                by_key.setdefault(k, []).append(name)
+                print('  {!r}  label={!r}  key={!r}'.format(name, lb, k))
+            for key, names in sorted(by_key.items()):
+                if len(names) > 1:
+                    print('  [duplicate label key {!r}] candidates={} -> using {!r}'.format(
+                        key, names, self.mainMenus.get(key)))
 
         mayaMenuDirectories = []
         customMenuDirectories = []
@@ -205,7 +311,7 @@ class Toolbox(object):
                 continue
 
             menuLabel = labelFromPath(toolDirectory)
-            formatLabel = menuLabel.replace(' ','').lower()
+            formatLabel = format_label_key_current(menuLabel)
 
             if formatLabel in self.mainMenus and not self.mainMenus[formatLabel].startswith(MAIN_MENU_NAME_PREFIX):
                 #maya menus
@@ -213,6 +319,15 @@ class Toolbox(object):
             else:
                 #custom menu
                 customMenuDirectories.append(toolDirectory)
+
+            if investigate:
+                matched = toolDirectory in mayaMenuDirectories
+                if matched:
+                    print('  [folder] {!r} menuLabel={!r} key={!r} -> merge into Maya menu {!r}'.format(
+                        folder, menuLabel, formatLabel, self.mainMenus[formatLabel]))
+                else:
+                    print('  [folder] {!r} menuLabel={!r} key={!r} -> custom top-level (no Maya key match)'.format(
+                        folder, menuLabel, formatLabel))
 
         if mayaMenuDirectories:
             for d in mayaMenuDirectories:
@@ -240,18 +355,35 @@ class Toolbox(object):
         Add tools to the maya menus
         '''
         menuLabel = labelFromPath(path)
-        formatLabel = menuLabel.replace(' ','').lower()
-        menuItemArray = mc.menu(self.mainMenus[formatLabel], query=True, itemArray=True)
+        formatLabel = format_label_key_current(menuLabel)
+        maya_menu = self.mainMenus[formatLabel]
+        menuItemArray = mc.menu(maya_menu, query=True, itemArray=True)
+        investigate = self.verbose or (os.environ.get('ML_TOOLBOX_INVESTIGATE', '').strip() not in ('', '0', 'false', 'False'))
+
+        def _item_count(arr):
+            return len(arr) if arr else 0
+
+        if investigate:
+            print('\n[ml_toolbox investigate] appendMayaMenu path={!r} menuLabel={!r} maya_menu={!r}'.format(
+                path, menuLabel, maya_menu))
+            print('  itemArray count (before postMenuCommand): {}'.format(_item_count(menuItemArray)))
 
         #if this menu hasn't been built yet, run the post menu command to build it
         #that took a long time to figure out.
         if not menuItemArray:
             if self.verbose:
                 print('pre-building menu: {}'.format(menuLabel))
-            pmc = mc.menu(self.mainMenus[formatLabel], query=True, postMenuCommand=True)
+            pmc = mc.menu(maya_menu, query=True, postMenuCommand=True)
+            if investigate:
+                print('  postMenuCommand: {!r}'.format(pmc))
             if pmc:
                 mm.eval(pmc)
-                menuItemArray = mc.menu(self.mainMenus[formatLabel], query=True, itemArray=True)
+                menuItemArray = mc.menu(maya_menu, query=True, itemArray=True)
+            if investigate:
+                print('  itemArray count (after postMenuCommand): {}'.format(_item_count(menuItemArray)))
+                if _item_count(menuItemArray) == 0:
+                    print('  NOTE: still empty — items may be created only when the menu is opened in the UI,')
+                    print('        or postMenuCommand did not populate queryable items.')
 
         #get all the menu items in the menu
         menuItems = {}
@@ -263,7 +395,7 @@ class Toolbox(object):
         subDirs = [posixpath.join(path,x) for x in os.listdir(path) if os.path.isdir(posixpath.join(path,x))]
         if subDirs:
             for each in subDirs:
-                self.createCustomMenu(each, parent=self.mainMenus[formatLabel], label=labelFromPath(each), depth=1)
+                self.createCustomMenu(each, parent=maya_menu, label=labelFromPath(each), depth=1)
 
         subItems = [posixpath.join(path,x) for x in os.listdir(path) if (x.endswith('.py') or x.endswith('.mel')) and x != '__init__.py']
 
@@ -272,7 +404,7 @@ class Toolbox(object):
                 tool = Tool(path, self.namespace)
                 self.classifyTool(tool)
                 if not tool.errors:
-                    tool.createMenuItem(parent=self.mainMenus[formatLabel], labelPrefix=MENU_ITEM_PREFIX+' ', italicized=True)
+                    tool.createMenuItem(parent=maya_menu, labelPrefix=MENU_ITEM_PREFIX+' ', italicized=True)
 
 
     def createCustomMenu(self, path, parent=None, label=None, depth=0, mainMenu=False):

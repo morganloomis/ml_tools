@@ -131,7 +131,7 @@ JOINT_PREBIND_MATRIX_ATTR = 'skinCluster_preBindMatrix'
 SKELETON_NODE_ATTR = 'puppeteerDataSkeleton'
 
 def main():
-    initPuppetContextMenu()
+    defer_initPuppetContextMenu()
     filter_graphEditor()
 
 
@@ -359,8 +359,8 @@ def getDagMenuScript():
     return filename
 
 def defer_initPuppetContextMenu():
-    #cmd = 'import ml_puppet;ml_puppet.initPuppetContextMenu()'
-    mc.evalDeferred('initPuppetContextMenu()')
+    cmd = 'import ml_puppet;ml_puppet.initPuppetContextMenu()'
+    mc.evalDeferred(cmd)
 
 def initPuppetContextMenu():
 
@@ -982,10 +982,227 @@ def hasFlippedParent(node, testRange=3):
     return False
 
 
-def export_animation(namespace=None, fbxFile=None):
+def list_skinned_meshes(namespace):
+    '''
+    List transform nodes in the puppet namespace that have a skinCluster
+    on a non-intermediate shape.
+    '''
+    transforms = mc.ls(f'{namespace}:*', type='transform') or []
+    skinned = []
+    for xfm in transforms:
+        shapes = mc.listRelatives(xfm, shapes=True, noIntermediate=True, path=True) or []
+        for shape in shapes:
+            history = mc.listHistory(shape, groupLevels=True, pruneDagObjects=True)
+            if history and mc.ls(history, type='skinCluster'):
+                skinned.append(xfm)
+                break
+    return skinned
+
+
+def copy_ghost_blendShape(source_mesh, ghost_mesh):
+    '''
+    Create matching blendShape nodes and targets on the ghost mesh.
+    '''
+    source_shapes = mc.listRelatives(source_mesh, shapes=True, noIntermediate=True) or []
+    ghost_shapes = mc.listRelatives(ghost_mesh, shapes=True, noIntermediate=True) or []
+    if not source_shapes or not ghost_shapes:
+        return
+
+    ghost_shape = ghost_shapes[0]
+    ghost_short = ghost_mesh.split(':')[-1]
+
+    for source_shape in source_shapes:
+        history = mc.listHistory(source_shape, pruneDagObjects=True) or []
+        blendshapes = mc.ls(history, type='blendShape') or []
+        for bs in blendshapes:
+            bs_name = bs.split(':')[-1]
+            if mc.objExists(bs_name):
+                #temporarily rename
+                pass
+            alias_list = mc.aliasAttr(bs, query=True) or []
+            if not alias_list:
+                continue
+
+            ghost_bs = mc.blendShape(ghost_mesh, name=bs_name)[0]
+
+            for i in range(0, len(alias_list), 2):
+                alias = alias_list[i]
+                weight_attr = alias_list[i + 1]
+                target = mc.duplicate(ghost_shape, returnRootsOnly=True)[0]
+                
+                #need error checking for target name
+                target = mc.rename(target, alias)
+         
+                mc.blendShape(ghost_bs, edit=True, target=(ghost_shape, i/2, target, 1.0))
+                mc.delete(target)
+
+                src_plug = f'{bs}.{weight_attr}'
+                dst_plug = f'{ghost_bs}.{alias}'
+                src = mc.listConnections(src_plug, source=True, destination=False, plugs=True)
+                if src:
+                    mc.connectAttr(src[0], dst_plug, force=True)
+                else:
+                    mc.setAttr(dst_plug, mc.getAttr(src_plug))
+
+
+def create_ghost_triangle(source_mesh, joints=None):
+    '''
+    Create a single-triangle proxy mesh at the world origin for one skinned source.
+    Returns (ghost_transform, cleanup_nodes) where cleanup_nodes includes the ghost
+    and any orphan geometry created for blendshape targets.
+    '''
+    short_name = source_mesh.split(':')[-1].split('|')[-1]
+
+    if mc.objExists(short_name):
+        utl.error(f'Ghost name collision for {source_mesh}')
+        raise RuntimeError
+
+    ghost_mesh = mc.polyCreateFacet(
+        p=[(0, 0, 0), (0,0,0.010), (0, 0.01, 0)],
+        constructionHistory=False,
+        name=short_name,
+    )[0]
+
+    #copy all blendshapes
+    copy_ghost_blendShape(source_mesh, ghost_mesh)
+
+    #skin to all joints
+    skin = utl.getSkinCluster(source_mesh)
+
+    if not joints:
+        joints = mc.skinCluster(skin, query=True, influence=True)
+    mc.skinCluster(ghost_mesh, joints)
+
+    return ghost_mesh
+
+
+def create_ghost_triangles(namespace, joints=None):
+    '''
+    Create ghost triangle proxies for all skinned meshes in a namespace..
+    '''
+    triangles = []
+    for source in list_skinned_meshes(namespace):
+        triangle = create_ghost_triangle(source, joints=joints)
+        triangles.append(triangle)
+    return triangles
+
+
+def export_animations(namespaceFilePairs, includeSkin=True, startFrame=None, endFrame=None):
+    '''
+    namespaceFilePairs is a dict. Keys are namespaces, values are target filepaths.
+    '''
+    if not isinstance(namespaceFilePairs, dict):
+        raise TypeError('namespaceFilePairs argument must be a dictionary')
+
+    bakeList = []
+
+    for namespace, fbxFile in namespaceFilePairs.items():
+        if not isinstance(namespace, str):
+            raise TypeError('Namespaces should be a strings.')
+        
+        if not os.path.isdir(os.path.dirname(fbxFile)):
+            raise RuntimeError('Directory does not exist: {}'.format(os.path.dirname(fbxFile)))
+
+    quarantine = []
+    frame_rate = utl.getFrameRate()
+    if not startFrame:
+        startFrame, endFrame = utl.frameRange()
+
+    bakeList = []
+    exportMap = {}
+
+    for namespace, fbxFile in namespaceFilePairs.items():
+        
+        fbxFile = os.path.normpath(fbxFile).replace('\\', '/')
+        
+        skel = Skeleton(namespace=namespace)
+        skel.init_skeletonNodes()
+
+        for root in skel.root_names():
+            if mc.objExists('|'+root):
+                quarantine.append(QuarantineNode(root))
+
+        #add a namespace, since we're going to have multiple skeletons for baking
+        exportNamespace = f'{namespace}EXPORT'
+        i=1
+        while(mc.namespace(exists=exportNamespace) or mc.namespace(exists=f':{exportNamespace}')):
+            exportNamespace = f'{exportNamespace}{i}'
+            i+=1
+        mc.namespace(set=":")
+        mc.namespace(add=exportNamespace)
+        mc.namespace(set=exportNamespace)
+
+        skel.create_skeleton(blendShapeProxy=not includeSkin)
+
+        joints = skel.joints(include_scale=True)
+        bakeList.extend(joints)
+        exportMap[exportNamespace] = [x.joint for x in skel.roots]
+
+        if includeSkin:
+            skel.apply_bindPose()
+            triangles = create_ghost_triangles(namespace, joints=joints)
+            #add triangles to be exported
+            exportMap[exportNamespace].extend(triangles)
+            #add blendshapes to bake list
+            for t in triangles:
+                bs = mc.ls(mc.listHistory(t), type='blendShape')
+                if bs:
+                    bakeList.extend(bs)
+
+        skel.connect_skeleton()
+        #may need to disconnect matrix connections, or other attrs which can't be baked.
+        for j in joints:
+            try:
+                conns = mc.listConnections(f'{j}.{JOINT_WORLD_MATRIX_ATTR}', s=True, d=False, plugs=True)
+                mc.disconnectAttr(conns[0], f'{j}.{JOINT_WORLD_MATRIX_ATTR}')
+            except Exception:
+                pass
+
+    #do the bake all at once
+    with utl.IsolateViews():
+        mc.bakeResults(bakeList, time=(startFrame,endFrame), sampleBy=1, preserveOutsideKeys=False, simulation=True)
+
+    mc.filterCurve(bakeList)
+
+    #go through each exported namespace.
+    fbx_kwargs = dict(
+        inputConnections=False,
+        bakeComplexAnimation=False,
+        colladaFrameRate=frame_rate,
+        constraints=False,
+        skins=includeSkin
+    )
+
+    for exportNamespace, nodes in exportMap.items():
+        #get selection
+        mc.select(nodes, replace=True)
+
+        #remove this namespace
+        mc.namespace( removeNamespace=f':{exportNamespace}', mergeNamespaceWithParent=True)
+        nodes = mc.ls(sl=True)
+
+        try:
+            FBX_export(fbxFile, **fbx_kwargs)
+        except Exception as err:
+            mc.delete(bakeList)
+            for q in quarantine:
+                q.release()
+            raise err
+
+        mc.delete(nodes)
+
+    for q in quarantine:
+        q.release()
+
+
+def export_animation(namespace=None, fbxFile=None, includeSkin=True):
     '''
     Export the puppet with the given namespace, to the given filepath.
     Namespace is required.
+
+    When ghost_triangle is True, create lightweight skinned triangle proxies
+    for each skinned mesh in the namespace (skin + blendshape data) instead
+    of joint-attribute blendShape proxies.
     '''
     
     if not namespace:
@@ -1012,36 +1229,12 @@ def export_animation(namespace=None, fbxFile=None):
         if not fbxFile.endswith('.fbx'):
             fbxFile+='.fbx'
     
-    
     fbxFile = os.path.normpath(fbxFile).replace('\\', '/')
-    
-    skel = Skeleton(namespace=namespace)
-    skel.init_skeletonNodes()
 
-    quarantine = []
-    for root in skel.root_names():
-        if mc.objExists('|'+root):
-            quarantine.append(QuarantineNode(root))
+    export_animations({namespace:fbxFile}, includeSkin=includeSkin)
+    
+    
 
-    skel.create_skeleton(blendShapeProxy=True)
-    skel.connect_skeleton()
-    
-    roots = [x.joint for x in skel.roots]
-    mc.select(roots)
-    try:
-        FBX_export(fbxFile, 
-                #animationOnly=True,
-                inputConnections=False,
-                bakeComplexAnimation=True)
-    except Exception as err:
-        raise err
-    finally:
-        mc.delete(roots)
-
-    for q in quarantine:
-        q.release()
-    
-    
 def FBX_export(filename, selection=True, **kwargs):
     '''
     FBX command wrapper.
@@ -1053,7 +1246,8 @@ def FBX_export(filename, selection=True, **kwargs):
         kwargs['generateLog'] = False
     if kwargs.get('skins', False) and utl.MAYA_VERSION >= 2024:
         kwargs['inputConnections'] = True
-        
+    if not 'inAscii' in kwargs:
+        kwargs['inAscii'] = False
 
     mm.eval('FBXResetExport')
     for k,v in kwargs.items():
@@ -1061,7 +1255,9 @@ def FBX_export(filename, selection=True, **kwargs):
             v = str(v).lower()
         elif isinstance(v, str):
             v = '"'+v+'"'
-        cmd = f'FBXExport{k[0].upper()}{k[1:]} -v {v}'
+        if not isinstance(v, (int,float)):
+            v = f'-v {v}'
+        cmd = f'FBXExport{k[0].upper()}{k[1:]} {v}'
         print(cmd)
         mm.eval(cmd)
     
@@ -1111,8 +1307,60 @@ class Skeleton(object):
 
     def root_names(self):
         return [x.name for x in self._entries.values() if not x.parent]
-    
-        
+
+    def joint_names(self):
+        return [x.name for x in self._entries.values()]
+
+    def joints(self, include_scale=True):
+        j = []
+        for x in self._entries.values():
+            j.append(x.joint)
+            if include_scale and x.scale:
+                j.append(x.scale)
+        return j
+
+
+    def ordered_entries(self):
+        '''
+        Return skeleton entries in hierarchical pre-order (roots before descendants).
+
+        Suitable for traversing the hierarchy from root to leaf. Does not require scene
+        joints (callable after init_skeletonNodes / init_skeletonNode only).
+        '''
+        children = {}
+        roots = []
+
+        for entry in self._entries.values():
+            parent = entry.parent
+            if parent and parent.name in self._entries:
+                children.setdefault(parent.name, []).append(entry)
+            else:
+                roots.append(entry)
+
+        ordered = []
+        visited = set()
+
+        def pre_order(entry):
+            if entry.name in visited:
+                return
+            visited.add(entry.name)
+            ordered.append(entry)
+            child_entries = children.get(entry.name, [])
+            child_entries.sort(key=lambda e: (e.skeletonNode, e.index))
+            for child in child_entries:
+                pre_order(child)
+
+        roots.sort(key=lambda e: e.name)
+        for root in roots:
+            pre_order(root)
+
+        for entry in self._entries.values():
+            if entry.name not in visited:
+                ordered.append(entry)
+
+        return ordered
+
+
     def init_skeletonNodes(self):
         for skelNode in get_skeleton_nodes(namespace=self.namespace):
             self.init_skeletonNode(skelNode)
@@ -1144,7 +1392,7 @@ class Skeleton(object):
         return entries
 
 
-    def create_skeleton(self, blendShapeProxy=True, parent=None):
+    def create_skeleton(self, blendShapeProxy=False):
         '''
         create a joint hierarchy from initialized skeleton entries
         '''
@@ -1158,6 +1406,13 @@ class Skeleton(object):
                 continue
             entry.joint = mc.parent(entry.joint, self._entries[entry.parent.name].joint)[0]
             entry.joint = mc.rename(entry.joint, entry.name)
+            #check if there's a scale joint underneath, and update that variable as well
+            if entry.scale:
+                kids = mc.listRelatives(entry.joint, pa=True, type='joint') or []
+                for kid in kids:
+                    if kid.rsplit('|',1)[-1] == entry.name+'_scale':
+                        entry.scale = kid
+                        break
 
         #create a joint proxy of the blendshape node
         if blendShapeProxy:
@@ -1201,21 +1456,26 @@ class Skeleton(object):
         #also check parents?
         
 
-
     def connect_skeleton(self):
         '''
         Connect joints to skeleton nodes in the scene
         '''
         for entry in self._entries.values():
             entry.connect_joint()
-            if mc.attributeQuery('split_scale', node=entry.skeletonNode, exists=True) and mc.getAttr(f'{entry.skeletonNode}.split_scale'):
-                entry.split_scale()
-            
-            
+            # if entry.do_split_scale:
+            #     entry.split_scale_create()
+            #     entry.split_scale_connect()
+
+    
     def connect_skin(self):
         for entry in list(self._entries.values()):
             entry.connect_skin()
         mc.dgdirty(a=True)
+
+
+    def apply_bindPose(self):
+        for entry in self.ordered_entries():
+            entry.apply_bindPose()
 
 
     def update_skeleton(self):
@@ -1252,7 +1512,6 @@ class Skeleton(object):
         for name in joints_to_create:
             entry = self._entries[name]
             entry.create_joint()
-            print(f"Created joint: {name}")
         
         # Step 2: Parent new joints and check/fix hierarchy of existing joints
         for name in target_joint_names:
@@ -1438,6 +1697,12 @@ class SkeletonEntry(object):
         return f'{self.struct}.active_matrix'
 
     @property
+    def do_split_scale(self):
+        if mc.attributeQuery('split_scale', node=self.skeletonNode, exists=True):
+            return bool(mc.getAttr(f'{self.skeletonNode}.split_scale'))
+        return False
+
+    @property
     def name(self):
         '''
         Joint name is derived from the node providing the world matrix for the joint, minus suffix.
@@ -1539,6 +1804,9 @@ class SkeletonEntry(object):
             self._children.append(child)
         
     def create_joint(self):
+        '''
+
+        '''
         mc.select(clear=True)
         found = []
         if mc.objExists(self.name):
@@ -1551,8 +1819,23 @@ class SkeletonEntry(object):
             self.joint = found[0]
         else:
             self.joint = mc.createNode('joint', name=self.name)
+
+        try:
+            mc.addAttr(self.joint, ln=JOINT_WORLD_MATRIX_ATTR, dt='matrix', keyable=True)
+        except Exception:
+            pass
+
+        if self.do_split_scale and not self.is_leaf:
+            mc.select(clear=True)
+            self.scale = mc.createNode('joint', name=self.name+'_scale')
+            mc.setAttr(f'{self.scale}.segmentScaleCompensate', 0)
+            mc.addAttr(self.scale, ln=JOINT_WORLD_MATRIX_ATTR, dt='matrix', keyable=True)
+
+            self.scale = mc.parent(self.scale, self.joint)[0]
+
         mc.setAttr(f'{self.joint}.segmentScaleCompensate', 0)
         mc.setAttr(f'{self.joint}.displayLocalAxis', 1)
+
 
     def parent_joint(self):
         '''
@@ -1580,9 +1863,7 @@ class SkeletonEntry(object):
                         self._localMatrix = b
 
         if not self._localMatrix:
-            try:
-                mc.addAttr(self.joint, ln=JOINT_WORLD_MATRIX_ATTR, dt='matrix', keyable=True)
-            except: pass
+
             mc.connectAttr(self.plug, '{}.{}'.format(self.joint, JOINT_WORLD_MATRIX_ATTR))
 
             self._localMatrix = mc.createNode('multMatrix', name='{}_localMatrix'.format(self.name))
@@ -1600,6 +1881,7 @@ class SkeletonEntry(object):
 
         return self._localMatrix
     
+
     def connect_joint(self):
         if not self.joint:
             raise RuntimeError('joint not created yet.')
@@ -1608,41 +1890,45 @@ class SkeletonEntry(object):
 
         mc.connectAttr('{}.matrixSum'.format(self.localMatrix), '{}.inputMatrix'.format(self.decompose))
         
-        mc.connectAttr('{}.outputTranslate'.format(self.decompose), '{}.translate'.format(self.joint))
-        mc.connectAttr('{}.outputRotate'.format(self.decompose), '{}.rotate'.format(self.joint))
-        mc.connectAttr('{}.outputScale'.format(self.decompose), '{}.scale'.format(self.joint))
+        for x in 'XYZ':
+            mc.connectAttr(f'{self.decompose}.outputTranslate{x}', f'{self.joint}.translate{x}')
+            mc.connectAttr(f'{self.decompose}.outputRotate{x}', f'{self.joint}.rotate{x}')
+            if not self.scale:
+                mc.connectAttr(f'{self.decompose}.outputScale{x}', f'{self.joint}.scale{x}')
+            else:
+                mc.connectAttr(f'{self.decompose}.outputScale{x}', f'{self.scale}.scale{x}')
 
-    def split_scale(self):
-        '''
-        If the joint is not a root or leaf, remove scale, and transfer scale to a new leaf joint underneath.
-        '''
+
+    def apply_bindPose(self):
+
         if not self.joint:
-            raise RuntimeError('joint not created yet.')
-        if self.is_leaf:
+            return
+        if not ml_snap:
+            raise RuntimeError('ml_snap module is required for setting bindpose.')
+        skin = mc.listConnections(self.plug, source=False, destination=True, type='skinCluster', plugs=True) or []
+        if not skin:
+            mc.setAttr(f'{self.joint}.translate',0,0,0)
+            mc.setAttr(f'{self.joint}.rotate',0,0,0)
+            mc.setAttr(f'{self.joint}.scale',1,1,1)
+            if not self.scale:
+                return
+            mc.setAttr(f'{self.scale}.translate',0,0,0)
+            mc.setAttr(f'{self.scale}.rotate',0,0,0)
+            mc.setAttr(f'{self.scale}.scale',1,1,1)
             return
         
-        if not self.decompose:
-            self.connect_joint()
+        skin, attr = skin[0].split('.',1)
+        index = int(attr.split('[')[-1].strip(']'))
+        prebind_matrix = utl.Matrix(mc.getAttr(f'{skin}.bindPreMatrix[{index}]'))
 
-        mc.select(clear=True)
-        self.scale = mc.createNode('joint', name=self.name+'_scale')
-        mc.setAttr('{}.segmentScaleCompensate'.format(self.scale), 0)
-        mc.addAttr(self.scale, ln=JOINT_WORLD_MATRIX_ATTR, dt='matrix', keyable=True)
-        mc.connectAttr(self.plug, '{}.{}'.format(self.scale, JOINT_WORLD_MATRIX_ATTR))
+        ml_snap.set_worldMatrix(self.joint, prebind_matrix.inverse())
 
-        #disconnect parent scale before parenting
-        mc.disconnectAttr('{}.outputScale'.format(self.decompose), '{}.scale'.format(self.joint))
-        mc.setAttr('{}.scale'.format(self.joint), 1,1,1)
+        if self.scale:
+            mc.setAttr(f'{self.scale}.translate',0,0,0)
+            mc.setAttr(f'{self.scale}.rotate',0,0,0)
+            mc.setAttr(f'{self.scale}.scale',1,1,1)
         
-        #parent before connection
-        self.scale = mc.parent(self.scale, self.joint)[0]
-        for a in ['t','r','jo']:
-            for b in 'xyz':
-                mc.setAttr(f'{self.scale}.{a}{b}',0)
 
-        #transfer scale from parent to this.
-        mc.connectAttr('{}.outputScale'.format(self.decompose), '{}.scale'.format(self.scale))
-        
     def connect_skin(self):
         #connect to skincluster
         jnt = self.scale or self.joint

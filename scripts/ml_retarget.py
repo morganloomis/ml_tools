@@ -15,26 +15,26 @@ if not os.path.exists(RETARGET_RIG_FILE):
 
 uiUnit = om.MTime.uiUnit()
 
-SKELETON_LOOKUP = {'Hip':['hips'],
-                    'Spine':['spine7','spine2','spine1'],
-                    'Neck':['neck'],
+SKELETON_LOOKUP = {'Hip':['hips','pelvis'],
+                    'Spine':['spine7','spine2','spine1','spine_03'],
+                    'Neck':['neck','neck_01'],
                     'Head':['head'],
-                    'LeftCollar':['leftshoulder'],
-                    'RightCollar':['rightshoulder'],
-                    'LeftShoulder':['leftarm'],
-                    'RightShoulder':['rightarm'],
-                    'LeftElbow':['leftforearm'],
-                    'RightElbow':['rightforearm'],
-                    'LeftHand':['lefthand'],
-                    'RightHand':['righthand'],
-                    'LeftHip':['leftupleg'],
-                    'RightHip':['rightupleg'],
-                    'LeftKnee':['leftleg'],
-                    'RightKnee':['rightleg'],
-                    'LeftFoot':['leftfoot'],
-                    'RightFoot':['rightfoot'],
-                    'LeftToe':['lefttoebase'],
-                    'RightToe':['righttoebase'],
+                    'LeftCollar':['leftshoulder','clavicle_l','lclavicle'],
+                    'RightCollar':['rightshoulder','clavicle_r','rclavicle'],
+                    'LeftShoulder':['leftarm','upperarm_l','lupperarm'],
+                    'RightShoulder':['rightarm','upperarm_r','rupperarm'],
+                    'LeftElbow':['leftforearm','lowerarm_l','llowerarm'],
+                    'RightElbow':['rightforearm','lowerarm_r','rlowerarm'],
+                    'LeftHand':['lefthand', 'hand_l', 'lhand'],
+                    'RightHand':['righthand', 'hand_r', 'rhand'],
+                    'LeftHip':['leftupleg','thigh_l','lthight'],
+                    'RightHip':['rightupleg','thigh_r','rthight'],
+                    'LeftKnee':['leftleg','calf_l','lcalf'],
+                    'RightKnee':['rightleg','calf_r','rcalf'],
+                    'LeftFoot':['leftfoot','foot_l','lfoot'],
+                    'RightFoot':['rightfoot','foot_r','rfoot'],
+                    'LeftToe':['lefttoebase','ball_l','ltoe0'],
+                    'RightToe':['righttoebase','ball_r','rtoe0'],
 
                     'LeftThumb':['lefthandthumb1','lefthandthumb'],
                     'LeftIndex Finger':['lefthandindex1','lefthandindex'],
@@ -117,7 +117,11 @@ def tag_joint(key):
 
     for each in SKELETON_LOOKUP[key]:
         for j in joints:
-            if j.lower().endswith(each):
+
+            test = j.replace('FBXASC032','')
+            test = test.split(':')[-1]
+            test = test.lower()
+            if test.endswith(each):
                 joint = j
                 break
         if joint:
@@ -264,6 +268,9 @@ def bake_skeleton_to_retarget_node(retarget, root=None):
             i+=1
 
     matrixData = ml_match.get_matrix_data(list(matrices.keys()), start=start, end=end)
+    # Matrix data keys are frame indices at current scene rate; pass so keys are placed at scene time.
+    sec_per_frame = om.MTime(1, om.MTime.uiUnit()).asUnits(om.MTime.kSeconds)
+    current_fps = 1.0 / sec_per_frame if sec_per_frame else None
     clip =  f'{retargNS}:clip'
     for plug,value in matrixData.items():
         name = matrices[plug]
@@ -283,13 +290,30 @@ def bake_skeleton_to_retarget_node(retarget, root=None):
                 if not mc.attributeQuery(attr, exists=True, node=clip):
                     continue
                 p = [y[i] for y in points[j]]
-                set_keyframes_api(f'{clip}.{attr}', times, p)
+                set_keyframes_api(f'{clip}.{attr}', times, p, source_fps=current_fps)
 
 
-def set_keyframes_api(node_attr, frames, values):
-    
-    #set an initial keyframe
-    mc.setKeyframe(node_attr, value=0, time=frames[0])
+def set_keyframes_api(node_attr, frames, values, source_fps=None):
+    '''
+    Set keyframes on node_attr at the given frames with the given values.
+    Frames are placed using the current scene time unit.
+
+    When source_fps is given, frames are treated as frame indices at that rate
+    and converted to current scene time so timing matches the scene framerate.
+    When source_fps is None, frames are treated as scene-time frame indices (current behavior).
+    '''
+    ui_unit = om.MTime.uiUnit()
+    if source_fps is not None and source_fps > 0:
+        def to_scene_time(frame):
+            t_sec = frame / float(source_fps)
+            t = om.MTime(t_sec, om.MTime.kSeconds)
+            return t.asUnits(ui_unit)
+        scene_times = [to_scene_time(f) for f in frames]
+    else:
+        scene_times = [float(f) for f in frames]
+
+    # Set an initial keyframe
+    mc.setKeyframe(node_attr, value=0, time=scene_times[0])
 
     # Get the plug
     sel = om.MSelectionList()
@@ -307,8 +331,8 @@ def set_keyframes_api(node_attr, frames, values):
     time_array = om.MTimeArray()
     value_array = om.MDoubleArray()
     
-    for frame, value in zip(frames, values):
-        time_array.append(om.MTime(frame, om.MTime.uiUnit()))
+    for scene_time, value in zip(scene_times, values):
+        time_array.append(om.MTime(scene_time, ui_unit))
         value_array.append(value)
     
     animCurve.addKeys(time_array, value_array)
@@ -335,21 +359,27 @@ def import_and_tag_fbx(fbxFile):
     if not ass:
         raise RuntimeError('Import Failed.')
     root = None
-    for a in ass:
-        if mc.nodeType(a) == 'joint':
-            root = a
-        else:
-            mc.delete(a)
-
+    root_assembly = None  # assembly that contains the root (don't delete this)
+    # Find root before deleting - listRelatives needs assemblies to exist
+    for x in ass:
+        if mc.nodeType(x) == 'joint':
+            root = x
+            root_assembly = x
+            break
     if not root:
-        for a in ass:
-            x = mc.listRelatives(a, type='joint', pa=True)
-            if x:
-                root = x[0]
+        for x in ass:
+            children = mc.listRelatives(x, type='joint', pa=True)
+            if children:
+                root = children[0]
+                root_assembly = x
                 break
-
     if not root:
         raise RuntimeError('Could not determine root joint.')
+    # Delete wrapper assemblies that don't contain the root (keep hierarchy intact)
+    for x in ass:
+        if x != root_assembly and mc.objExists(x):
+            mc.delete(x)
+    ass = [x for x in ass if mc.objExists(x)]
     start, end = _get_range(root)
     mc.playbackOptions(min=start, max=end)
 
@@ -465,6 +495,9 @@ def constrain_puppet_to_retarget(puppet, retargetNS, layer=False):
                 mc.connectAttr(f'{ctrl}.{attr}', f'{pupctrl}.{attr}')
 
 
+def bake_puppet_sel():
+    
+    bake_puppet(retargetNS=None)
 
 def bake_puppet(retargetNS=None):
 
@@ -519,18 +552,36 @@ def bake_puppet(retargetNS=None):
         system.match_range(1)
 
 def _get_range(node):
-    while True:
-        times = mc.keyframe(node, query=True, timeChange=True)
-        if times:
-            break
-        node = mc.listRelatives(node, pa=True, shapes=False)
-        if node:
-            node = node[0]
-        else:
-            return None
+    """Return (start, end) from keyframes on node(s) and their hierarchies."""
 
-    times = sorted(times)
-    return times[0], times[-1]
+    def _iter_nodes(seed):
+        if isinstance(seed, (list, tuple)):
+            seeds = [n for n in seed if n and mc.objExists(n)]
+        else:
+            seeds = [seed] if seed and mc.objExists(seed) else []
+        seen = set()
+        for s in seeds:
+            if s in seen:
+                continue
+            seen.add(s)
+            yield s
+            for d in mc.listRelatives(s, ad=True, pa=True) or []:
+                if d not in seen:
+                    seen.add(d)
+                    yield d
+
+    times = []
+    for n in _iter_nodes(node):
+        kt = mc.keyframe(n, query=True, timeChange=True)
+        if kt:
+            times.extend(kt)
+    if times:
+        times.sort()
+        return times[0], times[-1]
+
+    start = mc.playbackOptions(query=True, min=True)
+    end = mc.playbackOptions(query=True, max=True)
+    return start, end
 
 
 if __name__ == '__main__':

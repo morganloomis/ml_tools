@@ -64,7 +64,7 @@ def matrix_to_position(matrix):
     else:
         raise IOError(f'Input value is not a valid matrix or plug: {matrix}')
 
-def set_worldMatrix(node, matrix, offsetMatrix=None, iterateTolerance=0.0001, iterationMax=4, position=True, orientation=True):
+def set_worldMatrix(node, matrix, offsetMatrix=None, iterateTolerance=0.0001, iterationMax=4, position=True, orientation=True, scale=False):
     '''
     best way to decompose and set world matrix all in one go?
     om is faster but doesn't undo.
@@ -77,16 +77,17 @@ def set_worldMatrix(node, matrix, offsetMatrix=None, iterateTolerance=0.0001, it
     
     iterationMax = iterationMax or 1
 
-    #check if there's a better way to do this with xform
-    translate = [0,0,0]
     for i in range(iterationMax):
         if not position:
-            p = get_worldPosition(node)
-            for i,p in zip([12,13,14,15], p):
+            pos = get_worldPosition(node)
+            for i,p in zip([12,13,14,15], pos):
                 matrix[i] = p
         if not orientation:
             pass
-
+            # ori = get_worldMatrix(node)
+            # for i,p in zip([0,1,2,4,5,6,8,9,10], ori):
+            #     matrix[i] = p
+        
         mc.xform(node, matrix=matrix, worldSpace=True)
 
         if iterationMax == 1:
