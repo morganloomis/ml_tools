@@ -35,3 +35,31 @@ MAYA_MODULE_PATH = /path/to/ml_tools
 In the shelf, click the gear icon on the left side, then Load Shelf:
 
 ![demo_maya_load_shelf](https://user-images.githubusercontent.com/16049822/80697264-05ea5100-8ad9-11ea-9eb4-dd22c4acf365.gif)
+
+## Running tests
+
+Tests run inside Maya via `mayapy` (not from system Python). Ensure `ml_tools` is on `MAYA_MODULE_PATH` so `scripts/` resolves the same way as in Maya.
+
+Install dev dependencies into Maya's Python (once per Maya install):
+
+```text
+"C:\Program Files\Autodesk\Maya2024\bin\mayapy.exe" -m pip install -r requirements-dev.txt
+```
+
+Run the full suite:
+
+```text
+"C:\Program Files\Autodesk\Maya2024\bin\mayapy.exe" -m pytest tests/ -v
+```
+
+Exclude UI entry-point smoke tests:
+
+```text
+mayapy -m pytest tests/ -v -m "not ui"
+```
+
+Note: `mayapy` runs in batch mode, so Maya UI commands are unavailable. Entry-point smoke for `ui()` tools is skipped automatically; logic tests call underlying functions directly. Run UI smoke interactively from Maya's Script Editor if needed.
+
+## ml_dynamics
+
+**ml_dynamics** (secondary motion / XPBD simulation) has moved to the standalone **anim_dynamics** repository. Install both repos on `MAYA_MODULE_PATH` if you use dynamics alongside other ml_tools scripts. See `G:\My Drive\packages\anim_dynamics\README.md` for install and test instructions.
