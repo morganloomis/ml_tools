@@ -183,7 +183,7 @@ def showAll(*args):
         mc.delete(ATTR_FILTER_NAME)
     except:pass
 
-    for ge in mc.getPanel(scriptType='graphEditor'):
+    for ge in mc.getPanel(scriptType='graphEditor') or []:
         mm.eval('filterUIClearFilter  {};'.format(mc.animCurveEditor(ge+'GraphEd', query=True, outliner=True)))
 
 

@@ -119,10 +119,13 @@ def _getStartAndEnd():
     Only return start and end if frame range is highlighted. Otherwise use all available animation.
     '''
 
-    gPlayBackSlider = mm.eval('$temp=$gPlayBackSlider')
-    if mc.timeControl(gPlayBackSlider, query=True, rangeVisible=True):
-        start, end = mc.timeControl(gPlayBackSlider, query=True, rangeArray=True)
-        return start, end-1
+    try:
+        gPlayBackSlider = mm.eval('$temp=$gPlayBackSlider')
+        if mc.timeControl(gPlayBackSlider, query=True, rangeVisible=True):
+            start, end = mc.timeControl(gPlayBackSlider, query=True, rangeArray=True)
+            return start, end-1
+    except RuntimeError:
+        pass
     return None, None
 
 

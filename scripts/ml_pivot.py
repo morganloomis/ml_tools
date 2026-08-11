@@ -100,9 +100,17 @@ except ImportError:
         mc.showHelp('http://morganloomis.com/tool/ml_utilities/',absolute=True)
 
 
-#get maya window as qt object
-main_window_ptr = mui.MQtUtil.mainWindow()
-qt_maya_window = shiboken.wrapInstance(int(main_window_ptr), QtCore.QObject)
+qt_maya_window = None
+
+
+def _qt_maya_window():
+    '''Return the Maya main window as a Qt object, or None in batch mode.'''
+    global qt_maya_window
+    if qt_maya_window is None:
+        main_window_ptr = mui.MQtUtil.mainWindow()
+        if main_window_ptr:
+            qt_maya_window = shiboken.wrapInstance(int(main_window_ptr), QtCore.QObject)
+    return qt_maya_window
 
 def ui():
     '''
@@ -139,7 +147,9 @@ class PivotKeypressFilter(QtCore.QObject):
                     self.enterCommand()
             if event.key() == QtCore.Qt.Key_Escape:
                 self.escapeCommand()
-                qt_maya_window.removeEventFilter(self)
+                window = _qt_maya_window()
+                if window:
+                    window.removeEventFilter(self)
         return False
 
 
@@ -245,7 +255,9 @@ class EditPivotContext(object):
 
     def editPivotHandle(self):
 
-        qt_maya_window.installEventFilter(self.keypressFilter)
+        window = _qt_maya_window()
+        if window:
+            window.installEventFilter(self.keypressFilter)
 
         #create transform
         self.pivotHandle = mc.group(em=True, name='Adjust_Pivot')
@@ -310,7 +322,9 @@ class EditPivotContext(object):
 
         #end context
         try:
-            qt_maya_window.removeEventFilter(self.keypressFilter)
+            window = _qt_maya_window()
+            if window:
+                window.removeEventFilter(self.keypressFilter)
         except:
             pass
 

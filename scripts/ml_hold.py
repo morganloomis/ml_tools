@@ -251,8 +251,13 @@ def holdRange(current=False, average=False):
     graphVis = mc.selectionConnection('graphEditor1FromOutliner', query=True, obj=True)
 
     # first check if a range is selected
-    gPlayBackSlider = mm.eval('$temp=$gPlayBackSlider')
-    if mc.timeControl(gPlayBackSlider, query=True, rangeVisible=True):
+    try:
+        gPlayBackSlider = mm.eval('$temp=$gPlayBackSlider')
+        rangeVisible = mc.timeControl(gPlayBackSlider, query=True, rangeVisible=True)
+    except RuntimeError:
+        rangeVisible = False
+
+    if rangeVisible:
         pbRange = mc.timeControl(gPlayBackSlider, query=True, rangeArray=True)
         start = float(pbRange[0])
         end = float(pbRange[1])-1

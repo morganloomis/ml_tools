@@ -81,7 +81,7 @@ def get_matrix_data(matrices, start=None, end=None, verbose=False):
     return data
 
 
-def test_matrix_data(nodes):
+def matrix_data_to_locators(nodes):
 
     start, end = utl.frameRange()
 

@@ -128,11 +128,87 @@ Press Current or Average to turn a frame range into a curveSwap.''') as win:
         #mc.setParent('..')
 
 def swap(x=False, y=False, z=False):
+    '''Swap rotation values between two selected axes on the current selection.'''
+    axes = []
+    if x:
+        axes.append('rx')
+    if y:
+        axes.append('ry')
+    if z:
+        axes.append('rz')
+    if len(axes) != 2:
+        OpenMaya.MGlobal.displayWarning('Select exactly two axes to swap.')
+        return
 
     sel = mc.ls(sl=True)
+    if not sel:
+        OpenMaya.MGlobal.displayWarning('Nothing selected.')
+        return
 
-    a = 'rx' if x else 'ry'
-    b = 'rz' if z else 'ry'
+    attr_a, attr_b = axes[0], axes[1]
+    with utl.UndoChunk():
+        for node in sel:
+            plug_a = f'{node}.{attr_a}'
+            plug_b = f'{node}.{attr_b}'
+            val_a = mc.getAttr(plug_a)
+            val_b = mc.getAttr(plug_b)
+            mc.setAttr(plug_a, val_b)
+            mc.setAttr(plug_b, val_a)
+            if mc.keyframe(plug_a, query=True, keyframeCount=True):
+                mc.setKeyframe(plug_a)
+            if mc.keyframe(plug_b, query=True, keyframeCount=True):
+                mc.setKeyframe(plug_b)
 
-    for each in sel:
-        a = mc.listConnections()
+
+def swapFrame(next=False, previous=False):
+    '''Match keys to the next or previous keyframe value on visible curves.'''
+    if (next and previous) or (not next and not previous):
+        OpenMaya.MGlobal.displayWarning('This function requires exactly one argument to be true.')
+        return
+
+    sel = mc.ls(sl=True)
+    if not sel:
+        OpenMaya.MGlobal.displayWarning('Nothing selected.')
+        return
+
+    currentTime = mc.currentTime(query=True)
+    keySel = utl.KeySelection()
+    if not (keySel.selectedKeys() or keySel.visibleInGraphEditor() or keySel.keyedChannels()):
+        keySel.setKeyframe()
+
+    with utl.UndoChunk():
+        selected = mc.keyframe(query=True, name=True, selected=True)
+        for curve in keySel.curves:
+            start = currentTime
+            end = currentTime
+            findFrom = currentTime
+            value = None
+            if selected and curve in selected:
+                keyTimes = mc.keyframe(curve, query=True, timeChange=True, selected=True)
+                if keyTimes:
+                    if next:
+                        start = keyTimes[0]
+                        findFrom = keyTimes[-1]
+                    elif previous:
+                        end = keyTimes[-1]
+                        findFrom = keyTimes[0]
+            if next:
+                end = mc.findKeyframe(curve, time=(findFrom,), which='next')
+                value = mc.keyframe(curve, time=(end,), query=True, valueChange=True)[0]
+            elif previous:
+                start = mc.findKeyframe(curve, time=(findFrom,), which='previous')
+                value = mc.keyframe(curve, time=(start,), query=True, valueChange=True)[0]
+            if start != end:
+                if (end - start) > 1:
+                    mc.cutKey(curve, time=(start + 0.1, end - 0.1))
+                mc.keyframe(curve, time=(start, end), edit=True, valueChange=value)
+
+
+def next(*args):
+    '''Match selected key or current frame to the next keyframe value.'''
+    swapFrame(next=True)
+
+
+def previous(*args):
+    '''Match selected key or current frame to the previous keyframe value.'''
+    swapFrame(previous=True)

@@ -505,28 +505,46 @@ def bake_puppet(retargetNS=None):
         sel = mc.ls(sl=True)
         if not sel:
             return
-        if not ':' in sel[0]:
+        if ':' not in sel[0]:
+            utl.warning('Please select a namespaced puppet or retarget control.')
             return
-        retargetNS = sel[0].split(':')[0]
-        if not mc.objExists(retargetNS+':constraints'):
+        ns = sel[0].split(':')[0]
+        if mc.objExists(f'{ns}:constraints'):
+            retargetNS = ns
+        else:
+            retargetNS = f'RETARGET_{ns}'
+        if not mc.objExists(f'{retargetNS}:constraints'):
+            utl.warning(f'No retarget constraints found ({retargetNS}:constraints).')
             return
         
-    constraints = mc.listRelatives(retargetNS+':constraints', pa=True)
+    constraints = mc.listRelatives(retargetNS+':constraints', pa=True) or []
     ctrls = []
     for constraint in constraints:
         # Get the constrained objects (controls) from the constraint
-        try:
-            constrained = mc.listConnections(f'{constraint}.constraintRotateX', destination=True, source=False)
-        except:
-            pass
+        constrained = mc.listConnections(constraint, destination=True, source=False, plugs=True)
         if not constrained:
-            constrained = mc.listConnections(f'{constraint}.constraintTranslateX', destination=True, source=False)
+            node_type = mc.nodeType(constraint)
+            if node_type == 'orientConstraint':
+                attrs = ('constraintRotateX', 'constraintRotateY', 'constraintRotateZ')
+            elif node_type == 'pointConstraint':
+                attrs = ('constraintTranslateX', 'constraintTranslateY', 'constraintTranslateZ')
+            else:
+                attrs = ('constraintTranslateX', 'constraintRotateX')
+            for attr in attrs:
+                if not mc.attributeQuery(attr, node=constraint, exists=True):
+                    continue
+                constrained = mc.listConnections(f'{constraint}.{attr}', destination=True, source=False)
+                if constrained:
+                    break
         if constrained:
             ctrl = constrained[0].split('.')[0]  # Get the node name without attribute
             if ctrl not in ctrls:
                 ctrls.append(ctrl)
 
-    
+    if not ctrls:
+        utl.warning('No puppet controls found on retarget constraints.')
+        return
+
     start, end = _get_range(retargetNS+':clip')
 
     mc.bakeResults(ctrls, 
@@ -550,6 +568,14 @@ def bake_puppet(retargetNS=None):
         if not system.driver.endswith('.fk_ik'):
             continue
         system.match_range(1)
+
+    retarget_node = f'{retargetNS}:retarget'
+    if mc.objExists(retarget_node) and mc.referenceQuery(retarget_node, isNodeReferenced=True):
+        ref_node = mc.referenceQuery(retarget_node, referenceNode=True)
+        mc.file(removeReference=True, referenceNode=ref_node)
+        if mc.objExists(ref_node):
+            mc.lockNode(ref_node, lock=False)
+            mc.delete(ref_node)
 
 def _get_range(node):
     """Return (start, end) from keyframes on node(s) and their hierarchies."""

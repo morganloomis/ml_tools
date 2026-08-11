@@ -357,12 +357,16 @@ def frameRange(start=None, end=None):
     '''
 
     if not start and not end:
-        gPlayBackSlider = mm.eval('$temp=$gPlayBackSlider')
-        if mc.timeControl(gPlayBackSlider, query=True, rangeVisible=True):
-            frameRange = mc.timeControl(gPlayBackSlider, query=True, rangeArray=True)
-            start = frameRange[0]
-            end = frameRange[1]-1
-        else:
+        try:
+            gPlayBackSlider = mm.eval('$temp=$gPlayBackSlider')
+            if mc.timeControl(gPlayBackSlider, query=True, rangeVisible=True):
+                frameRange = mc.timeControl(gPlayBackSlider, query=True, rangeArray=True)
+                start = frameRange[0]
+                end = frameRange[1]-1
+            else:
+                start = mc.playbackOptions(query=True, min=True)
+                end = mc.playbackOptions(query=True, max=True)
+        except RuntimeError:
             start = mc.playbackOptions(query=True, min=True)
             end = mc.playbackOptions(query=True, max=True)
 
@@ -663,9 +667,9 @@ def listAnimCurves(objOrAttrs):
 
     animNodes = list()
 
-    tl = mc.listConnections(objOrAttr, s=True, d=False, type='animCurveTL')
-    ta = mc.listConnections(objOrAttr, s=True, d=False, type='animCurveTA')
-    tu = mc.listConnections(objOrAttr, s=True, d=False, type='animCurveTU')
+    tl = mc.listConnections(objOrAttrs, s=True, d=False, type='animCurveTL')
+    ta = mc.listConnections(objOrAttrs, s=True, d=False, type='animCurveTA')
+    tu = mc.listConnections(objOrAttrs, s=True, d=False, type='animCurveTU')
 
     if tl:
         animNodes.extend(tl)
@@ -1416,7 +1420,8 @@ class KeySelection(object):
         '''
 
 
-        if not 'graphEditor1' in mc.getPanel(visiblePanels=True):
+        panels = mc.getPanel(visiblePanels=True) or []
+        if 'graphEditor1' not in panels:
             return False
 
         graphVis = mc.selectionConnection('graphEditor1FromOutliner', query=True, obj=True)
@@ -1544,10 +1549,13 @@ class KeySelection(object):
         Sets the keySelection time to the selected frame range, returns false if frame range not selected.
         '''
 
-        gPlayBackSlider = mm.eval('$temp=$gPlayBackSlider')
-        if mc.timeControl(gPlayBackSlider, query=True, rangeVisible=True):
-            self._timeRangeStart, self._timeRangeEnd = mc.timeControl(gPlayBackSlider, query=True, rangeArray=True)
-            return True
+        try:
+            gPlayBackSlider = mm.eval('$temp=$gPlayBackSlider')
+            if mc.timeControl(gPlayBackSlider, query=True, rangeVisible=True):
+                self._timeRangeStart, self._timeRangeEnd = mc.timeControl(gPlayBackSlider, query=True, rangeArray=True)
+                return True
+        except RuntimeError:
+            pass
         return False
 
 
@@ -2254,14 +2262,20 @@ class Vector:
         '''
         Initialize the vector with 3 values, or else
         '''
+        if isinstance(x, Vector):
+            self.x, self.y, self.z = x.x, x.y, x.z
+        elif isinstance(x, (list, tuple)) and len(x) == 3:
+            self.x, self.y, self.z = x[0], x[1], x[2]
+        else:
+            self.x, self.y, self.z = x, y, z
 
-        if self._isCompatible(x):
-            x = x[0]
-            y = x[1]
-            z = x[2]
-        self.x = x
-        self.y = y
-        self.z = z
+    @classmethod
+    def coerce(cls, value, y=0, z=0):
+        if isinstance(value, cls):
+            return value
+        if isinstance(value, (list, tuple)) and len(value) == 3:
+            return cls(value[0], value[1], value[2])
+        return cls(value, y, z)
 
     def __repr__(self):
         return 'Vector({0:.2f}, {1:.2f}, {2:.2f})'.format(*self)
@@ -2431,9 +2445,7 @@ class Matrix:
         return self._array
 
     def _coerce_vector(self, vec):
-        if isinstance(vec, Vector):
-            return vec
-        return Vector(vec)
+        return Vector.coerce(vec)
 
     def __mul__(self, other):
 
@@ -2504,11 +2516,11 @@ class Matrix:
         '''
         Sim frame: +Y aim, +X up, +Z = Y x X (right-handed). position may be Vector or 3-tuple.
         '''
-        pos = Vector(position) if not isinstance(position, Vector) else position
-        y = Vector(aim_y).normalized()
+        pos = Vector.coerce(position)
+        y = Vector.coerce(aim_y).normalized()
         if y.magnitude() < 1e-10:
             y = Vector(0, 1, 0)
-        x = Vector(up_x).normalized()
+        x = Vector.coerce(up_x).normalized()
         if x.magnitude() < 1e-10:
             x = y.cross(Vector(0, 1, 0)).normalized()
         if x.magnitude() > 1e-10:
